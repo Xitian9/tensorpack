@@ -376,11 +376,11 @@ def get_train_dataflow():
             buffer_size = cfg.DATA.NUM_WORKERS * 10  # one dataflow for each process, therefore don't need large buffer
             ds = MultiThreadMapData(ds, cfg.DATA.NUM_WORKERS, preprocess, buffer_size=buffer_size)
             # MPI does not like fork()
-        else: # if platform != 'win32'
+        elif platform != 'win32':
             buffer_size = cfg.DATA.NUM_WORKERS * 20
             ds = MultiProcessMapDataZMQ(ds, cfg.DATA.NUM_WORKERS, preprocess, buffer_size=buffer_size)
-        # else:
-        #     ds = MultiThreadMapData(ds, 10, preprocess)
+        else:
+            ds = MultiThreadMapData(ds, 10, preprocess)
     else:
         ds = MapData(ds, preprocess)
     return ds
