@@ -78,18 +78,18 @@ config = AttrDict()
 _C = config     # short alias to avoid coding
 
 # mode flags ---------------------
-_C.TRAINER = 'replicated'  # options: 'horovod', 'replicated'
-_C.MODE_MASK = True        # FasterRCNN or MaskRCNN
+_C.TRAINER = 'replicated'  # options: 'horovod', 'replicated', 'cpu'
+_C.MODE_MASK = False       # FasterRCNN or MaskRCNN
 _C.MODE_FPN = False
 
 # dataset -----------------------
-_C.DATA.BASEDIR = '/path/to/your/DATA/DIR'
+_C.DATA.BASEDIR = os.path.abspath('/home/stephen/projects/plygrad/Datasets/syntheticDataShapes1')
 # All TRAIN dataset will be concatenated for training.
-_C.DATA.TRAIN = ('coco_train2014', 'coco_valminusminival2014')   # i.e. trainval35k, AKA train2017
+_C.DATA.TRAIN = ('shapes_train', )   # i.e. trainval35k, AKA train2017
 # Each VAL dataset will be evaluated separately (instead of concatenated)
-_C.DATA.VAL = ('coco_minival2014', )  # AKA val2017
+_C.DATA.VAL = ('shapes_val', )  # AKA val2017
 # This two config will be populated later by the dataset loader:
-_C.DATA.NUM_CATEGORY = 80  # without the background class (e.g., 80 for COCO)
+_C.DATA.NUM_CATEGORY = 3  # without the background class (e.g., 80 for COCO)
 _C.DATA.CLASS_NAMES = []  # NUM_CLASS (NUM_CATEGORY+1) strings, the first is "BG".
 # whether the coordinates in the annotations are absolute pixel values, or a relative value in [0, 1]
 _C.DATA.ABSOLUTE_COORD = True
@@ -101,7 +101,7 @@ _C.BACKBONE.RESNET_NUM_BLOCKS = [3, 4, 6, 3]     # for resnet50
 # RESNET_NUM_BLOCKS = [3, 4, 23, 3]    # for resnet101
 _C.BACKBONE.FREEZE_AFFINE = False   # do not train affine parameters inside norm layers
 _C.BACKBONE.NORM = 'FreezeBN'  # options: FreezeBN, SyncBN, GN, None
-_C.BACKBONE.FREEZE_AT = 2  # options: 0, 1, 2
+_C.BACKBONE.FREEZE_AT = 2  # options: 0, 1, 2, 3
 
 # Use a base model with TF-preferred padding mode,
 # which may pad more pixels on right/bottom than top/left.
@@ -174,7 +174,7 @@ _C.RPN.TRAIN_PER_LEVEL_NMS_TOPK = 2000
 _C.RPN.TEST_PER_LEVEL_NMS_TOPK = 1000
 
 # fastrcnn training ---------------------
-_C.FRCNN.BATCH_PER_IM = 512
+_C.FRCNN.BATCH_PER_IM = 256  # Original 512
 _C.FRCNN.BBOX_REG_WEIGHTS = [20., 20., 10., 10.]  # Detectron: 10, 10, 5, 5
 _C.FRCNN.FG_THRESH = 0.5
 _C.FRCNN.FG_RATIO = 0.25  # fg ratio in a ROI batch
@@ -222,7 +222,7 @@ def finalize_configs(is_training):
     assert _C.BACKBONE.NORM in ['FreezeBN', 'SyncBN', 'GN', 'None'], _C.BACKBONE.NORM
     if _C.BACKBONE.NORM != 'FreezeBN':
         assert not _C.BACKBONE.FREEZE_AFFINE
-    assert _C.BACKBONE.FREEZE_AT in [0, 1, 2]
+    assert _C.BACKBONE.FREEZE_AT in [0, 1, 2, 3]
 
     _C.RPN.NUM_ANCHOR = len(_C.RPN.ANCHOR_SIZES) * len(_C.RPN.ANCHOR_RATIOS)
     assert len(_C.FPN.ANCHOR_STRIDES) == len(_C.RPN.ANCHOR_SIZES)
@@ -248,7 +248,7 @@ def finalize_configs(is_training):
             # don't autotune if augmentation is on
             os.environ['TF_CUDNN_USE_AUTOTUNE'] = '0'
         os.environ['TF_AUTOTUNE_THRESHOLD'] = '1'
-        assert _C.TRAINER in ['horovod', 'replicated'], _C.TRAINER
+        assert _C.TRAINER in ['cpu', 'horovod', 'replicated'], _C.TRAINER
 
         # setup NUM_GPUS
         if _C.TRAINER == 'horovod':
@@ -258,11 +258,15 @@ def finalize_configs(is_training):
             if ngpu == hvd.local_size():
                 logger.warn("It's not recommended to use horovod for single-machine training. "
                             "Replicated trainer is more stable and has the same efficiency.")
-        else:
+            assert ngpu > 0, "Has to train with GPU!"
+            assert ngpu % 8 == 0 or 8 % ngpu == 0, "Can only train with 1,2,4 or >=8 GPUs, but found {} GPUs".format(ngpu)
+        elif _C.TRAINER == 'replicated':
             assert 'OMPI_COMM_WORLD_SIZE' not in os.environ
             ngpu = get_num_gpu()
-        assert ngpu > 0, "Has to train with GPU!"
-        assert ngpu % 8 == 0 or 8 % ngpu == 0, "Can only train with 1,2,4 or >=8 GPUs, but found {} GPUs".format(ngpu)
+            assert ngpu > 0, "Has to train with GPU!"
+            assert ngpu % 8 == 0 or 8 % ngpu == 0, "Can only train with 1,2,4 or >=8 GPUs, but found {} GPUs".format(ngpu)
+        else:
+            ngpu = 1
     else:
         # autotune is too slow for inference
         os.environ['TF_CUDNN_USE_AUTOTUNE'] = '0'

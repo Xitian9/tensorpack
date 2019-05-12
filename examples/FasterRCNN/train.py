@@ -3,14 +3,16 @@
 # File: train.py
 
 import argparse
+from sys import platform
 import six
 assert six.PY3, "This example requires Python 3!"
 
 from tensorpack import *
+from tensorpack.callbacks.prof import *
 from tensorpack.tfutils import collect_env_info
 from tensorpack.tfutils.common import get_tf_version_tuple
 
-from dataset import register_coco
+from dataset import register_coco, register_shapes
 from config import config as cfg
 from config import finalize_configs
 from data import get_train_dataflow
@@ -37,7 +39,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     if args.config:
         cfg.update_args(args.config)
-    register_coco(cfg.DATA.BASEDIR)  # add COCO datasets to the registry
+    register_shapes(cfg.DATA.BASEDIR)  # add datasets to the registry
 
     # Setup logger ...
     is_horovod = cfg.TRAINER == 'horovod'
@@ -82,7 +84,6 @@ if __name__ == '__main__':
         ScheduledHyperParamSetter(
             'learning_rate', warmup_schedule, interp='linear', step_based=True),
         ScheduledHyperParamSetter('learning_rate', lr_schedule),
-        GPUMemoryTracker(),
         HostMemoryTracker(),
         EstimatedTimeLeft(median=True),
         SessionRunTimeout(60000),   # 1 minute timeout
@@ -92,8 +93,8 @@ if __name__ == '__main__':
             EvalCallback(dataset, *MODEL.get_inference_tensor_names(), args.logdir)
             for dataset in cfg.DATA.VAL
         ])
-    if not is_horovod:
-        callbacks.append(GPUUtilizationTracker())
+    if cfg.TRAINER == 'replicated':  # and platform != 'win32':
+        callbacks.extend([GPUMemoryTracker(), GPUUtilizationTracker()])
 
     if is_horovod and hvd.rank() > 0:
         session_init = None
@@ -114,7 +115,9 @@ if __name__ == '__main__':
     )
     if is_horovod:
         trainer = HorovodTrainer(average=False)
-    else:
+    elif cfg.TRAINER == 'replicated':
         # nccl mode appears faster than cpu mode
         trainer = SyncMultiGPUTrainerReplicated(cfg.TRAIN.NUM_GPUS, average=False, mode='nccl')
+    else:
+        trainer = QueueInputTrainer()
     launch_train_with_config(traincfg, trainer)

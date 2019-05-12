@@ -4,6 +4,7 @@
 import copy
 import itertools
 import numpy as np
+from sys import platform
 import cv2
 from tabulate import tabulate
 from termcolor import colored
@@ -307,7 +308,7 @@ def get_train_dataflow():
         fname, boxes, klass, is_crowd = roidb['file_name'], roidb['boxes'], roidb['class'], roidb['is_crowd']
         boxes = np.copy(boxes)
         im = cv2.imread(fname, cv2.IMREAD_COLOR)
-        assert im is not None, fname
+        assert im is not None, fname + "bob"
         im = im.astype('float32')
         height, width = im.shape[:2]
         # assume floatbox as input
@@ -375,9 +376,11 @@ def get_train_dataflow():
             buffer_size = cfg.DATA.NUM_WORKERS * 10  # one dataflow for each process, therefore don't need large buffer
             ds = MultiThreadMapData(ds, cfg.DATA.NUM_WORKERS, preprocess, buffer_size=buffer_size)
             # MPI does not like fork()
-        else:
+        else: # if platform != 'win32'
             buffer_size = cfg.DATA.NUM_WORKERS * 20
             ds = MultiProcessMapDataZMQ(ds, cfg.DATA.NUM_WORKERS, preprocess, buffer_size=buffer_size)
+        # else:
+        #     ds = MultiThreadMapData(ds, 10, preprocess)
     else:
         ds = MapData(ds, preprocess)
     return ds
@@ -398,6 +401,8 @@ def get_eval_dataflow(name, shard=0, num_shards=1):
 
     # no filter for training
     ds = DataFromListOfDict(roidbs[img_range[0]: img_range[1]], ['file_name', 'image_id'])
+
+    print(ds)
 
     def f(fname):
         im = cv2.imread(fname, cv2.IMREAD_COLOR)

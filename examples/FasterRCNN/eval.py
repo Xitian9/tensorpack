@@ -197,7 +197,7 @@ class EvalCallback(Callback):
             self.dataflows = [get_eval_dataflow(self._eval_dataset,
                                                 shard=k, num_shards=self.num_predictor)
                               for k in range(self.num_predictor)]
-        else:
+        elif cfg.TRAINER == 'horovod':
             # Only eval on the first machine.
             # Alternatively, can eval on all ranks and use allgather, but allgather sometimes hangs
             self._horovod_run_eval = hvd.rank() == hvd.local_rank()
