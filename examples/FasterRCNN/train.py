@@ -84,7 +84,8 @@ if __name__ == '__main__':
         ScheduledHyperParamSetter(
             'learning_rate', warmup_schedule, interp='linear', step_based=True),
         ScheduledHyperParamSetter('learning_rate', lr_schedule),
-        HostMemoryTracker(),
+        # TODO Not available on tensorflow <=0.9.4
+        # HostMemoryTracker(),
         EstimatedTimeLeft(median=True),
         SessionRunTimeout(60000),   # 1 minute timeout
     ]
@@ -93,8 +94,13 @@ if __name__ == '__main__':
             EvalCallback(dataset, *MODEL.get_inference_tensor_names(), args.logdir)
             for dataset in cfg.DATA.VAL
         ])
-    if cfg.TRAINER == 'replicated':  # and platform != 'win32':
-        callbacks.extend([GPUMemoryTracker(), GPUUtilizationTracker()])
+
+    # TODO Not available on tensorflow <=0.9.4
+    # if cfg.TRAINER != 'cpu':
+    #     callbacks.append(GPUMemoryTracker())
+
+    if cfg.TRAINER == 'replicated' and platform != 'win32':
+        callbacks.append(GPUUtilizationTracker())
 
     if is_horovod and hvd.rank() > 0:
         session_init = None
