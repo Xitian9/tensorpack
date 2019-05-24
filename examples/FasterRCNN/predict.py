@@ -17,7 +17,7 @@ from tensorpack.predict import MultiTowerOfflinePredictor, OfflinePredictor, Pre
 from tensorpack.tfutils import get_model_loader, get_tf_version_tuple
 from tensorpack.utils import fs, logger
 
-from dataset import DatasetRegistry, register_coco
+from dataset import DatasetRegistry, register_coco, register_shapes
 from config import config as cfg
 from config import finalize_configs
 from data import get_eval_dataflow, get_train_dataflow
@@ -117,7 +117,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     if args.config:
         cfg.update_args(args.config)
-    register_coco(cfg.DATA.BASEDIR)  # add COCO datasets to the registry
+    register_shapes(cfg.DATA.BASEDIR)  # add COCO datasets to the registry
     MODEL = ResNetFPNModel() if cfg.MODE_FPN else ResNetC4Model()
 
     if not tf.test.is_gpu_available():
