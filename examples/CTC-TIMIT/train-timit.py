@@ -10,7 +10,6 @@ from six.moves import range
 
 from tensorpack import *
 from tensorpack.tfutils.gradproc import GlobalNormClip, SummaryGradient
-from tensorpack.utils import serialize
 
 from timitdata import TIMITBatch
 
@@ -83,7 +82,7 @@ def get_data(path, isTrain, stat_file):
     ds = MapDataComponent(ds, lambda x: (x - mean) / std)
     ds = TIMITBatch(ds, BATCH)
     if isTrain:
-        ds = PrefetchDataZMQ(ds, 1)
+        ds = MultiProcessRunnerZMQ(ds, 1)
     return ds
 
 

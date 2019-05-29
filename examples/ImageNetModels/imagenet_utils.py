@@ -11,7 +11,9 @@ import tensorflow as tf
 import tqdm
 
 from tensorpack import ModelDesc
-from tensorpack.dataflow import AugmentImageComponent, BatchData, MultiThreadMapData, PrefetchDataZMQ, dataset, imgaug
+from tensorpack.dataflow import (
+    AugmentImageComponent, BatchData, MultiThreadMapData,
+    MultiProcessRunnerZMQ, dataset, imgaug)
 from tensorpack.input_source import QueueInput, StagingInput
 from tensorpack.models import regularize_cost, l2_regularizer
 from tensorpack.predict import FeedfreePredictor, PredictConfig
@@ -88,7 +90,7 @@ def get_imagenet_dataflow(
         ds = AugmentImageComponent(ds, augmentors, copy=False)
         if parallel < 16:
             logger.warn("DataFlow may become the bottleneck when too few processes are used.")
-        ds = PrefetchDataZMQ(ds, parallel)
+        ds = MultiProcessRunnerZMQ(ds, parallel)
         ds = BatchData(ds, batch_size, remainder=False)
     else:
         ds = dataset.ILSVRC12Files(datadir, name, shuffle=False)
@@ -101,7 +103,7 @@ def get_imagenet_dataflow(
             return im, cls
         ds = MultiThreadMapData(ds, parallel, mapf, buffer_size=2000, strict=True)
         ds = BatchData(ds, batch_size, remainder=True)
-        ds = PrefetchDataZMQ(ds, 1)
+        ds = MultiProcessRunnerZMQ(ds, 1)
     return ds
 
 
@@ -264,7 +266,11 @@ def fbresnet_mapper(isTrain):
 """
 
 
-def eval_on_ILSVRC12(model, sessinit, dataflow):
+def eval_classification(model, sessinit, dataflow):
+    """
+    Eval a classification model on the dataset. It assumes the model inputs are
+    named "input" and "label", and contains "wrong-top1" and "wrong-top5" in the graph.
+    """
     pred_config = PredictConfig(
         model=model,
         session_init=sessinit,

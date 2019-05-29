@@ -7,17 +7,16 @@ Since it is simply a generator interface, you can use the DataFlow in any Python
 or your own code as well.
 
 
-
 **What we are going to do**: We'll use ILSVRC12 dataset, which contains 1.28 million images.
 The original images (JPEG compressed) are 140G in total.
 The average resolution is about 400x350 <sup>[[1]]</sup>.
 Following the [ResNet example](../examples/ResNet), we need images in their original resolution,
 so we will read the original dataset (instead of a down-sampled version), and
 then apply complicated preprocessing to it.
-We aim to reach a speed of, roughly **1k~3k images per second**, to keep GPUs busy.
+We hope to reach a speed of **1k~5k images per second**, to keep GPUs busy.
 
 Some things to know before reading:
-1. For smaller datasets (e.g. several GBs of images with lightweight preprocessing), a simple reader plus some multiprocess prefetch should usually work well enough.
+1. For smaller datasets (e.g. several GBs of images with lightweight preprocessing), a simple reader plus some multiprocess runner should usually work well enough.
 	 Therefore you don't have to understand this tutorial in depth unless you really find your data being the bottleneck.
 	 This tutorial could be a bit complicated for people new to system architectures, but you do need these to be able to run fast enough on ImageNet-scale dataset.
 2. Having a fast Python generator **alone** may or may not improve your overall training speed.
@@ -37,10 +36,11 @@ Some things to know before reading:
     before doing any optimizations.
 
 The benchmark code for this tutorial can be found in [tensorpack/benchmarks](https://github.com/tensorpack/benchmarks/tree/master/ImageNet),
-including comparison with a similar (but simpler) pipeline built with `tf.data`.
+including comparison with a similar pipeline built with `tf.data`.
 
 ## Random Read
 
+### Basic
 We start from a simple DataFlow:
 ```python
 from tensorpack.dataflow import *
@@ -64,6 +64,8 @@ On a good filesystem you probably can already observe good speed here (e.g. 5 it
 because we are doing heavy random read on the filesystem (regardless of whether `shuffle` is True).
 Image decoding in `cv2.imread` could also be a bottleneck at this early stage.
 
+### Parallel Runner
+
 We will now add the cheapest pre-processing now to get an ndarray in the end instead of a list
 (because training will need ndarray eventually):
 ```eval_rst
@@ -82,15 +84,17 @@ Now it's time to add threads or processes:
 
 		ds0 = dataset.ILSVRC12('/path/to/ILSVRC12', 'train', shuffle=True)
 		ds1 = AugmentImageComponent(ds0, lots_of_augmentors)
-		ds = PrefetchDataZMQ(ds1, nr_proc=25)
+		ds = MultiProcessRunnerZMQ(ds1, num_proc=25)
 		ds = BatchData(ds, 256)
 ```
-Here we start 25 processes to run `ds1`, and collect their output through ZMQ IPC protocol,
-which is faster than `multiprocessing.Queue`. You can also apply prefetch after batch, of course.
+Here we fork 25 processes to run `ds1`, and collect their output through ZMQ IPC protocol.
+You can also apply parallel runner after batching, of course.
 
+### Parallel Map
 The above DataFlow might be fast, but since it forks the ImageNet reader (`ds0`),
-it's **not a good idea to use it for validation** (for reasons mentioned at top).
-Alternatively, you can use multi-threaded preprocessing like this:
+it's **not a good idea to use it for validation** (for reasons mentioned at top.
+More details at the [documentation](../modules/dataflow.html#tensorpack.dataflow.MultiProcessRunnerZMQ)).
+Alternatively, you can use parallel mapper like this:
 
 ```eval_rst
 .. code-block:: python
@@ -99,9 +103,9 @@ Alternatively, you can use multi-threaded preprocessing like this:
 		ds0 = dataset.ILSVRC12('/path/to/ILSVRC12', 'train', shuffle=True)
 		augmentor = AugmentorList(lots_of_augmentors)
 		ds1 = MultiThreadMapData(
-				ds0, nr_thread=25,
+				ds0, num_thread=25,
 				map_func=lambda dp: [augmentor.augment(dp[0]), dp[1]], buffer_size=1000)
-		# ds1 = PrefetchDataZMQ(ds1, nr_proc=1)
+		# ds1 = MultiProcessRunnerZMQ(ds1, num_proc=1)
 		ds = BatchData(ds1, 256)
 ```
 `MultiThreadMapData` launches a thread pool to fetch data and apply the mapping function on **a single
@@ -124,11 +128,11 @@ If you identify this as a bottleneck, you can also use:
 		ds0 = dataset.ILSVRC12Files('/path/to/ILSVRC12', 'train', shuffle=True)
 		augmentor = AugmentorList(lots_of_augmentors)
 		ds1 = MultiThreadMapData(
-				ds0, nr_thread=25,
+				ds0, num_thread=25,
 				map_func=lambda dp:
 					[augmentor.augment(cv2.imread(dp[0], cv2.IMREAD_COLOR)), dp[1]],
 				buffer_size=1000)
-		ds1 = PrefetchDataZMQ(ds1, nr_proc=1)
+		ds1 = MultiProcessRunnerZMQ(ds1, num_proc=1)
 		ds = BatchData(ds1, 256)
 ```
 
@@ -138,11 +142,11 @@ Let's summarize what the above dataflow does:
 3. Both 1 and 2 happen together in a separate process, and the results are sent back to main process through ZeroMQ.
 4. Main process makes batches, and other tensorpack modules will then take care of how they should go into the graph.
 
-Note that in an actual training setup, I used the above multiprocess version for training set since
-it's faster to run heavy preprocessing in processes, and use this multithread version only for validation set.
+And, of course, there is also a `MultiProcessMapData` as well for you to use.
 
 ## Sequential Read
 
+### Save and Load a Single-File DataFlow
 Random read may not be a good idea when the data is not on an SSD.
 We can also dump the dataset into one single LMDB file and read it sequentially.
 
@@ -156,15 +160,15 @@ class BinaryILSVRC12(dataset.ILSVRC12Files):
             jpeg = np.asarray(bytearray(jpeg), dtype='uint8')
             yield [jpeg, label]
 ds0 = BinaryILSVRC12('/path/to/ILSVRC/', 'train')
-ds1 = PrefetchDataZMQ(ds0, nr_proc=1)
+ds1 = MultiProcessRunnerZMQ(ds0, num_proc=1)
 LMDBSerializer.save(ds1, '/path/to/ILSVRC-train.lmdb')
 ```
 The above script builds a DataFlow which produces jpeg-encoded ImageNet data.
 We store the jpeg string as a numpy array because the function `cv2.imdecode` later expect this format.
-Please note we can only use 1 prefetch process to speed up. If `nr_proc>1`, `ds1` will take data
+Please note we can only use 1 runner process to speed up. If `num_proc>1`, `ds1` will take data
 from several forks of `ds0`, then neither the content nor the order of `ds1` will be the same as `ds0`.
-See [documentation](../modules/dataflow.html#tensorpack.dataflow.PrefetchDataZMQ)
-about caveats of `PrefetchDataZMQ`.
+See [documentation](../modules/dataflow.html#tensorpack.dataflow.MultiProcessRunnerZMQ)
+about caveats of `MultiProcessRunnerZMQ`.
 
 It will generate a database file of 140G. We load the DataFlow back by reading this LMDB file sequentially:
 ```
@@ -187,8 +191,10 @@ As a reference, on Samsung SSD 850, the uncached speed is about 16it/s.
 ```
 Instead of shuffling all the training data in every epoch (which would require random read),
 the added line above maintains a buffer of datapoints and shuffle them once a while.
-It will not affect the model as long as the buffer is large enough,
-but it can also consume much memory if too large.
+It will not affect the model very much as long as the buffer is large enough,
+but it can be memory-consuming if buffer is too large.
+
+### Augmentations & Parallel Runner
 
 Then we add necessary transformations:
 ```eval_rst
@@ -213,37 +219,37 @@ Both imdecode and the augmentors can be quite slow. We can parallelize them like
 
     ds = LMDBSerializer.load(db, shuffle=False)
     ds = LocallyShuffleData(ds, 50000)
-    ds = PrefetchData(ds, 5000, 1)
+    ds = MultiProcessRunner(ds, 5000, 1)
     ds = MapDataComponent(ds, lambda x: cv2.imdecode(x, cv2.IMREAD_COLOR), 0)
     ds = AugmentImageComponent(ds, lots_of_augmentors)
-    ds = PrefetchDataZMQ(ds, 25)
+    ds = MultiProcessRunnerZMQ(ds, 25)
     ds = BatchData(ds, 256)
 ```
 
 Since we are reading the database sequentially, having multiple forked instances of the
-base LMDB reader will result in biased data distribution. Therefore we use `PrefetchData` to
+base LMDB reader will result in biased data distribution. Therefore we use `MultiProcessRunner` to
 launch the base DataFlow in only **one process**, and only parallelize the transformations
-with another `PrefetchDataZMQ`
-(Nesting two `PrefetchDataZMQ`, however, will result in a different behavior.
+with another `MultiProcessRunnerZMQ`
+(Nesting two `MultiProcessRunnerZMQ`, however, is not allowed.
 These differences are explained in the API documentation in more details.).
 Similar to what we did earlier, you can use `MultiThreadMapData` to parallelize as well.
 
 Let me summarize what this DataFlow does:
 
-1. One process reads LMDB file, shuffle them in a buffer and put them into a `multiprocessing.Queue` (used by `PrefetchData`).
+1. One process reads LMDB file, shuffle them in a buffer and put them into a `multiprocessing.Queue` (used by `MultiProcessRunner`).
 2. 25 processes take items from the queue, decode and process them into [image, label] pairs, and
 	 send them through ZMQ IPC pipe.
 3. The main process takes data from the pipe, makes batches.
 
-The two DataFlow mentioned in this tutorial (both random read and sequential read) can run at a speed of 1k ~ 2.5k images per second if you have good CPUs, RAM, disks.
-With fewer augmentations, it can reach 5k images/s.
+The two DataFlow mentioned in this tutorial (both random read and sequential read) can run at a speed of 1k ~ 5k images per second,
+depend on your hardware condition of CPUs, RAM, disks, and the amount of augmentation.
 As a reference, tensorpack can train ResNet-18 at 1.2k images/s on 4 old TitanX.
-8 P100s can train ResNet-50 at 1.7k images/s according to the [official benchmark](https://www.tensorflow.org/performance/benchmarks).
+8 V100s can train ResNet-50 at 2.8k images/s according to [tensorpack benchmark](https://github.com/tensorpack/benchmarks/tree/master/ResNet-MultiGPU).
 So DataFlow will not be a serious bottleneck if configured properly.
 
 ## Distributed DataFlow
 
-To further scale your DataFlow, you can run it on multiple machines and collect them on the
+To further scale your DataFlow, you can even run it on multiple machines and collect them on the
 training machine. E.g.:
 ```python
 # Data Machine #1, process 1-20:
@@ -265,6 +271,17 @@ send_dataflow_zmq(df, 'ipc://@my-socket')
 df = RemoteDataZMQ('ipc://@my-socket', 'tcp://0.0.0.0:8877')
 TestDataSpeed(df).start()
 ```
+
+
+## Common Issues on Windows:
+
+1. Windows does not support ZMQ. You can only use `MultiProcessRunner`,
+   `MultiThreadRunner`, and `MultiThreadMapData`. But you cannot use 
+   `MultiProcessRunnerZMQ` or `MultiProcessMapData` (which is an alias of `MultiProcessMapDataZMQ`).
+2. Windows needs to pickle your dataflow to run it in multiple processes.
+   As a result you cannot use lambda functions for mappings, like the examples above.
+   You need to write a new function in global scope that does the mapping.
+   This issue also exist on Linux if you do not use the 'fork' start method.
 
 [1]: #ref
 

@@ -20,7 +20,7 @@ from .model_cascade import CascadeRCNNHead
 from .model_fpn import fpn_model, generate_fpn_proposals, multilevel_roi_align, multilevel_rpn_losses
 from .model_frcnn import (
     BoxProposals, FastRCNNHead, fastrcnn_outputs, fastrcnn_predictions, sample_fast_rcnn_targets)
-from .model_mrcnn import maskrcnn_loss, maskrcnn_upXconv_head
+from .model_mrcnn import maskrcnn_loss, maskrcnn_upXconv_head, unpackbits_masks
 from .model_rpn import generate_rpn_proposals, rpn_head, rpn_losses
 
 
@@ -62,6 +62,9 @@ class GeneralizedRCNN(ModelDesc):
 
     def build_graph(self, *inputs):
         inputs = dict(zip(self.input_names, inputs))
+        if "gt_masks_packed" in inputs:
+            gt_masks = tf.cast(unpackbits_masks(inputs.pop("gt_masks_packed")), tf.uint8, name="gt_masks")
+            inputs["gt_masks"] = gt_masks
 
         image = self.preprocess(inputs['image'])     # 1CHW
 
@@ -91,8 +94,8 @@ class ResNetC4Model(GeneralizedRCNN):
             tf.TensorSpec((None,), tf.int64, 'gt_labels')]  # all > 0
         if cfg.MODE_MASK:
             ret.append(
-                tf.TensorSpec((None, None, None), tf.uint8, 'gt_masks')
-            )   # NR_GT x height x width
+                tf.TensorSpec((None, None, None), tf.uint8, 'gt_masks_packed')
+            )   # NR_GT x height x ceil(width/8), packed groundtruth masks
         return ret
 
     def backbone(self, image):
@@ -101,7 +104,11 @@ class ResNetC4Model(GeneralizedRCNN):
     def rpn(self, image, features, inputs):
         featuremap = features[0]
         rpn_label_logits, rpn_box_logits = rpn_head('rpn', featuremap, cfg.RPN.HEAD_DIM, cfg.RPN.NUM_ANCHOR)
-        anchors = RPNAnchors(get_all_anchors(), inputs['anchor_labels'], inputs['anchor_boxes'])
+        anchors = RPNAnchors(
+            get_all_anchors(
+                stride=cfg.RPN.ANCHOR_STRIDE, sizes=cfg.RPN.ANCHOR_SIZES,
+                ratios=cfg.RPN.ANCHOR_RATIOS, max_size=cfg.PREPROC.MAX_SIZE),
+            inputs['anchor_labels'], inputs['anchor_boxes'])
         anchors = anchors.narrow_to(featuremap)
 
         image_shape2d = tf.shape(image)[2:]     # h,w
@@ -198,8 +205,8 @@ class ResNetFPNModel(GeneralizedRCNN):
             tf.TensorSpec((None,), tf.int64, 'gt_labels')])  # all > 0
         if cfg.MODE_MASK:
             ret.append(
-                tf.TensorSpec((None, None, None), tf.uint8, 'gt_masks')
-            )   # NR_GT x height x width
+                tf.TensorSpec((None, None, None), tf.uint8, 'gt_masks_packed')
+            )
         return ret
 
     def slice_feature_and_anchors(self, p23456, anchors):
@@ -216,7 +223,11 @@ class ResNetFPNModel(GeneralizedRCNN):
         assert len(cfg.RPN.ANCHOR_SIZES) == len(cfg.FPN.ANCHOR_STRIDES)
 
         image_shape2d = tf.shape(image)[2:]     # h,w
-        all_anchors_fpn = get_all_anchors_fpn()
+        all_anchors_fpn = get_all_anchors_fpn(
+            strides=cfg.FPN.ANCHOR_STRIDES,
+            sizes=cfg.RPN.ANCHOR_SIZES,
+            ratios=cfg.RPN.ANCHOR_RATIOS,
+            max_size=cfg.PREPROC.MAX_SIZE)
         multilevel_anchors = [RPNAnchors(
             all_anchors_fpn[i],
             inputs['anchor_labels_lvl{}'.format(i + 2)],

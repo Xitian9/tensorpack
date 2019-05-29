@@ -93,7 +93,10 @@ _C.DATA.NUM_CATEGORY = 3  # without the background class (e.g., 80 for COCO)
 _C.DATA.CLASS_NAMES = []  # NUM_CLASS (NUM_CATEGORY+1) strings, the first is "BG".
 # whether the coordinates in the annotations are absolute pixel values, or a relative value in [0, 1]
 _C.DATA.ABSOLUTE_COORD = True
-_C.DATA.NUM_WORKERS = 5  # number of data loading workers. set to 0 to disable parallel data loading
+# Number of data loading workers.
+# In case of horovod training, this is the number of workers per-GPU (so you may want to use a smaller number).
+# Set to 0 to disable parallel data loading
+_C.DATA.NUM_WORKERS = 10
 
 # backbone ----------------------
 _C.BACKBONE.WEIGHTS = ''   # /path/to/weights.npz
@@ -127,8 +130,8 @@ _C.TRAIN.STARTING_EPOCH = 1  # the first epoch to start with, useful to continue
 # the base learning rate are computed from BASE_LR and LR_SCHEDULE.
 # Therefore, there is *no need* to modify the config if you only change the number of GPUs.
 
-# _C.TRAIN.LR_SCHEDULE = [120000, 160000, 180000]      # "1x" schedule in detectron
-_C.TRAIN.LR_SCHEDULE = [240000, 320000, 360000]      # "2x" schedule in detectron
+_C.TRAIN.LR_SCHEDULE = [120000, 160000, 180000]      # "1x" schedule in detectron
+# _C.TRAIN.LR_SCHEDULE = [240000, 320000, 360000]      # "2x" schedule in detectron
 # Longer schedules for from-scratch training (https://arxiv.org/abs/1811.08883):
 # _C.TRAIN.LR_SCHEDULE = [960000, 1040000, 1080000]    # "6x" schedule in detectron
 # _C.TRAIN.LR_SCHEDULE = [1500000, 1580000, 1620000]   # "9x" schedule in detectron
@@ -174,8 +177,8 @@ _C.RPN.TRAIN_PER_LEVEL_NMS_TOPK = 2000
 _C.RPN.TEST_PER_LEVEL_NMS_TOPK = 1000
 
 # fastrcnn training ---------------------
-_C.FRCNN.BATCH_PER_IM = 256  # Original 512
-_C.FRCNN.BBOX_REG_WEIGHTS = [20., 20., 10., 10.]  # Detectron: 10, 10, 5, 5
+_C.FRCNN.BATCH_PER_IM = 512
+_C.FRCNN.BBOX_REG_WEIGHTS = [10., 10., 5., 5.]  # Slightly better setting: 20, 20, 10, 10
 _C.FRCNN.FG_THRESH = 0.5
 _C.FRCNN.FG_RATIO = 0.25  # fg ratio in a ROI batch
 

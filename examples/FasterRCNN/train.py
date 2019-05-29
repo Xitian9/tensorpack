@@ -27,6 +27,11 @@ except ImportError:
 
 
 if __name__ == '__main__':
+    # "spawn/forkserver" is safer than the default "fork" method and
+    # produce more deterministic behavior & memory saving
+    # However its limitation is you cannot pass a lambda function to subprocesses.
+    import multiprocessing as mp
+    mp.set_start_method('spawn')
     parser = argparse.ArgumentParser()
     parser.add_argument('--load', help='load a model to start training from. Can overwrite BACKBONE.WEIGHTS')
     parser.add_argument('--logdir', help='log directory', default='train_log/maskrcnn')
@@ -84,8 +89,8 @@ if __name__ == '__main__':
         ScheduledHyperParamSetter(
             'learning_rate', warmup_schedule, interp='linear', step_based=True),
         ScheduledHyperParamSetter('learning_rate', lr_schedule),
-        # TODO Not available on tensorflow <=0.9.4
-        # HostMemoryTracker(),
+        HostMemoryTracker(),
+        ThroughputTracker(samples_per_step=cfg.TRAIN.NUM_GPUS),
         EstimatedTimeLeft(median=True),
         SessionRunTimeout(60000),   # 1 minute timeout
     ]
@@ -95,9 +100,8 @@ if __name__ == '__main__':
             for dataset in cfg.DATA.VAL
         ])
 
-    # TODO Not available on tensorflow <=0.9.4
-    # if cfg.TRAINER != 'cpu':
-    #     callbacks.append(GPUMemoryTracker())
+    if cfg.TRAINER != 'cpu':
+        callbacks.append(GPUMemoryTracker())
 
     if cfg.TRAINER == 'replicated' and platform != 'win32':
         callbacks.append(GPUUtilizationTracker())
