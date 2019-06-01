@@ -40,7 +40,7 @@ class KerasModelCaller(object):
         self.get_model = get_model
         self.cached_model = None
 
-    def __call__(self, input_tensors):
+    def __call__(self, *input_tensors):
         """
         Args:
             input_tensors ([tf.Tensor])
@@ -98,7 +98,7 @@ class KerasModelCaller(object):
             # NOTE: ctx.is_training won't be useful inside model,
             # because inference will always use the cached Keras model
             model = self.cached_model
-            outputs = model.call(input_tensors)
+            outputs = model.call(*input_tensors)
         else:
             # create new Keras model if not reuse
             model = self.get_model(*input_tensors)
@@ -106,6 +106,8 @@ class KerasModelCaller(object):
 
         post_process_model(model)
 
+        if isinstance(outputs, list) and len(outputs) == 1:
+            return outputs[0]
         return outputs
 
 
@@ -167,7 +169,7 @@ def setup_keras_trainer(
         target_tensors = list(inputs[nr_inputs:])
         # TODO mapping between target tensors & output tensors
 
-        outputs = model_caller(input_tensors)
+        outputs = model_caller(*input_tensors)
 
         if isinstance(outputs, tf.Tensor):
             outputs = [outputs]
@@ -215,7 +217,7 @@ def setup_keras_trainer(
         input,
         get_cost,
         lambda: optimizer)
-    if len(keras.backend.learning_phase().consumers()) > 0:
+    if isinstance(keras.backend.learning_phase(), tf.Tensor) and len(keras.backend.learning_phase().consumers()) > 0:
         # check if learning_phase is used in this model
         trainer.register_callback(KerasPhaseCallback(True))
 

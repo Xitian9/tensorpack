@@ -11,7 +11,7 @@ from tensorpack.tfutils.summary import add_moving_summary
 from tensorpack.utils.gpu import get_num_gpu
 
 import DCGAN
-from GAN import GANModelDesc, GANTrainer, MultiGPUGANTrainer
+from GAN import GANModelDesc, GANTrainer
 
 """
 Boundary Equilibrium GAN.
@@ -139,16 +139,12 @@ if __name__ == '__main__':
         input = QueueInput(DCGAN.get_data())
         model = Model()
         nr_tower = max(get_num_gpu(), 1)
-        if nr_tower == 1:
-            trainer = GANTrainer(input, model)
-        else:
-            trainer = MultiGPUGANTrainer(nr_tower, input, model)
-
+        trainer = GANTrainer(input, model, num_gpu=nr_tower)
         trainer.train_with_defaults(
             callbacks=[
                 ModelSaver(),
                 StatMonitorParamSetter(
-                    'learning_rate', 'measure', lambda x: x * 0.5, 0, 10)
+                    'learning_rate', 'losses/measure', lambda x: x * 0.5, 0, 10)
             ],
             session_init=SaverRestore(args.load) if args.load else None,
             steps_per_epoch=500, max_epoch=400)
