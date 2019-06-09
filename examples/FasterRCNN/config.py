@@ -83,7 +83,7 @@ _C.MODE_MASK = True        # FasterRCNN or MaskRCNN
 _C.MODE_FPN = False
 
 # dataset -----------------------
-_C.DATA.BASEDIR = '/path/to/your/DATA/DIR'
+_C.DATA.BASEDIR = r'C:\Users\PlyGradDev\COCODataset'
 # All TRAIN dataset will be concatenated for training.
 _C.DATA.TRAIN = ('coco_train2014', 'coco_valminusminival2014')   # i.e. trainval35k, AKA train2017
 # Each VAL dataset will be evaluated separately (instead of concatenated)
