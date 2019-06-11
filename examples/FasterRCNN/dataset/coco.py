@@ -17,8 +17,8 @@ __all__ = ['register_coco']
 class COCODetection(DatasetSplit):
     # handle the weird (but standard) split of train and val
     _INSTANCE_TO_BASEDIR = {
-        'valminusminival2014': 'val2017',
-        'minival2014': 'val2017',
+        'valminusminival2014': 'val2014',
+        'minival2014': 'val2014',
     }
 
     """
