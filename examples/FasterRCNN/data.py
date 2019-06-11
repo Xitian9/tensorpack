@@ -396,7 +396,10 @@ def get_train_dataflow():
             # MPI does not like fork()
         else:
             buffer_size = cfg.DATA.NUM_WORKERS * 20
-            ds = MultiProcessMapData(ds, cfg.DATA.NUM_WORKERS, preprocess, buffer_size=buffer_size)
+            if os.name != 'nt':
+                ds = MultiProcessMapData(ds, cfg.DATA.NUM_WORKERS, preprocess, buffer_size=buffer_size)
+            else:
+                ds = MultiThreadMapData(ds, cfg.DATA.NUM_WORKERS, preprocess, buffer_size=buffer_size)
     else:
         ds = MapData(ds, preprocess)
     return ds
