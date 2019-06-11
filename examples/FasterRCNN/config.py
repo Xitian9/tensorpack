@@ -85,7 +85,7 @@ _C.MODE_FPN = False
 # dataset -----------------------
 _C.DATA.BASEDIR = r'C:\Users\PlyGradDev\COCODataset'
 # All TRAIN dataset will be concatenated for training.
-_C.DATA.TRAIN = ('coco_train2017')   # i.e. trainval35k, AKA train2017
+_C.DATA.TRAIN = ('coco_train2017', )   # i.e. trainval35k, AKA train2017
 # Each VAL dataset will be evaluated separately (instead of concatenated)
 _C.DATA.VAL = ('coco_val2017', )  # AKA val2017
 # This two config will be populated later by the dataset loader:
