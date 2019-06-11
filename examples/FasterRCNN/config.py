@@ -156,7 +156,7 @@ _C.RPN.NEGATIVE_ANCHOR_THRESH = 0.3
 
 # rpn training -------------------------
 _C.RPN.FG_RATIO = 0.5  # fg ratio among selected RPN anchors
-_C.RPN.BATCH_PER_IM = 256  # total (across FPN levels) number of anchors that are marked valid
+_C.RPN.BATCH_PER_IM = 128  # total (across FPN levels) number of anchors that are marked valid
 _C.RPN.MIN_SIZE = 0
 _C.RPN.PROPOSAL_NMS_THRESH = 0.7
 # Anchors which overlap with a crowd box (IOA larger than threshold) will be ignored.
@@ -177,7 +177,7 @@ _C.RPN.TRAIN_PER_LEVEL_NMS_TOPK = 2000
 _C.RPN.TEST_PER_LEVEL_NMS_TOPK = 1000
 
 # fastrcnn training ---------------------
-_C.FRCNN.BATCH_PER_IM = 512
+_C.FRCNN.BATCH_PER_IM = 256
 _C.FRCNN.BBOX_REG_WEIGHTS = [10., 10., 5., 5.]  # Slightly better setting: 20, 20, 10, 10
 _C.FRCNN.FG_THRESH = 0.5
 _C.FRCNN.FG_RATIO = 0.25  # fg ratio in a ROI batch
