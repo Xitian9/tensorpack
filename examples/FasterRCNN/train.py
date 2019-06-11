@@ -98,7 +98,7 @@ if __name__ == '__main__':
             EvalCallback(dataset, *MODEL.get_inference_tensor_names(), args.logdir)
             for dataset in cfg.DATA.VAL
         ])
-    if not is_horovod:
+    if not is_horovod and os.name != 'nt':
         callbacks.append(GPUUtilizationTracker())
 
     if is_horovod and hvd.rank() > 0:
