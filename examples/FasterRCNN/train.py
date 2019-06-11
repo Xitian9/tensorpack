@@ -3,6 +3,7 @@
 # File: train.py
 
 import argparse
+import os
 import six
 assert six.PY3, "This example requires Python 3!"
 
