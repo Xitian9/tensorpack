@@ -87,3 +87,7 @@ target/
 
 .idea/
 *.diff
+
+# Vim stuff
+*~
+.swp*
