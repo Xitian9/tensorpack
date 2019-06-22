@@ -83,7 +83,7 @@ _C.MODE_MASK = False       # FasterRCNN or MaskRCNN
 _C.MODE_FPN = False
 
 # dataset -----------------------
-_C.DATA.BASEDIR = os.path.abspath('/home/stephen/projects/plygrad/Datasets/syntheticDataShapes1')
+_C.DATA.BASEDIR = os.path.abspath(r'C:\Users\PlyGradDev\plygrad\Datasets\syntheticDataShapes1')
 # All TRAIN dataset will be concatenated for training.
 _C.DATA.TRAIN = ('shapes_train', )   # i.e. trainval35k, AKA train2017
 # Each VAL dataset will be evaluated separately (instead of concatenated)
