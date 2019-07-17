@@ -235,6 +235,7 @@ class EvalCallback(Callback):
                               for k in range(self.num_predictor)]
         elif cfg.TRAINER == 'horovod':
             # Only eval on the first machine.
+            # Because evaluation assumes that all horovod workers share the filesystem.
             # Alternatively, can eval on all ranks and use allgather, but allgather sometimes hangs
             self._horovod_run_eval = hvd.rank() == hvd.local_rank()
             if self._horovod_run_eval:

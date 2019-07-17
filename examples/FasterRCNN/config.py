@@ -257,12 +257,6 @@ def finalize_configs(is_training):
         if _C.TRAINER == 'horovod':
             import horovod.tensorflow as hvd
             ngpu = hvd.size()
-
-            if ngpu == hvd.local_size():
-                logger.warn("It's not recommended to use horovod for single-machine training. "
-                            "Replicated trainer is more stable and has the same efficiency.")
-            assert ngpu > 0, "Has to train with GPU!"
-            assert ngpu % 8 == 0 or 8 % ngpu == 0, "Can only train with 1,2,4 or >=8 GPUs, but found {} GPUs".format(ngpu)
         elif _C.TRAINER == 'replicated':
             assert 'OMPI_COMM_WORLD_SIZE' not in os.environ
             ngpu = get_num_gpu()

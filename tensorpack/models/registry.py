@@ -4,6 +4,7 @@
 
 import copy
 import re
+import collections
 from functools import wraps
 import six
 import tensorflow as tf
@@ -61,6 +62,40 @@ def disable_layer_logging():
     globals()['_LAYER_LOGGED'] = ContainEverything()
 
 
+class LayerShapeLogger():
+    """
+    A class that logs shapes of inputs/outputs of layers,
+    during the possibly-nested calls to them.
+    """
+    def __init__(self):
+        self.stack = collections.deque()
+        self.depth = 0
+
+    def _indent(self):
+        return " " * (self.depth * 2)
+
+    def push_inputs(self, name, message):
+        while len(self.stack):
+            item = self.stack.pop()
+            logger.info(self._indent() + "'{}' input: {}".format(item[0], item[1]))
+            self.depth += 1
+
+        self.stack.append((name, message))
+
+    def push_outputs(self, name, message):
+        if len(self.stack):
+            assert len(self.stack) == 1, self.stack
+            assert self.stack[-1][0] == name, self.stack
+            item = self.stack.pop()
+            logger.info(self._indent() + "'{}': {} --> {}".format(name, item[1], message))
+        else:
+            self.depth -= 1
+            logger.info(self._indent() + "'{}' output: {}".format(name, message))
+
+
+_SHAPE_LOGGER = LayerShapeLogger()
+
+
 def layer_register(
         log_shape=False,
         use_scope=True):
@@ -103,8 +138,8 @@ def layer_register(
                     if use_scope is False:
                         logger.warn(
                             "Please call layer {} without the first scope name argument, "
-                            "or register the layer with use_scope=None to allow "
-                            "two calling methods.".format(func.__name__))
+                            "or register the layer with use_scope=None to allow calling it "
+                            "with scope names.".format(func.__name__))
                     name, inputs = args[0], args[1]
                     args = args[1:]  # actual positional args used to call func
                 else:
@@ -132,23 +167,21 @@ def layer_register(
                     scope_name = re.sub('tower[0-9]+/', '', scope.name)
                     do_log_shape = log_shape and scope_name not in _LAYER_LOGGED
                     if do_log_shape:
-                        logger.info("{} input: {}".format(scope.name, get_shape_str(inputs)))
+                        _SHAPE_LOGGER.push_inputs(scope.name, get_shape_str(inputs))
 
                     # run the actual function
                     outputs = func(*args, **actual_args)
 
                     if do_log_shape:
-                        # log shape info and add activation
-                        logger.info("{} output: {}".format(
-                            scope.name, get_shape_str(outputs)))
+                        _SHAPE_LOGGER.push_outputs(scope.name, get_shape_str(outputs))
                         _LAYER_LOGGED.add(scope_name)
             else:
                 # run the actual function
                 outputs = func(*args, **actual_args)
             return outputs
 
-        wrapped_func.symbolic_function = func   # attribute to access the underlying function object
         wrapped_func.use_scope = use_scope
+        wrapped_func.__argscope_enabled__ = True
         _register(func.__name__, wrapped_func)
         return wrapped_func
 
