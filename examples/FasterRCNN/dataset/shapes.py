@@ -112,7 +112,9 @@ class ShapesDetection(DatasetSplit):
             json.dump(results, f)
         if len(results):
             # sometimes may crash if the results are empty?
-            return results
+            #return results
+            # Not working at the moment: need to set up proper data summaries
+            return {}
         else:
             return {}
 
