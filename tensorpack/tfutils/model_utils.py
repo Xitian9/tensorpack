@@ -6,12 +6,12 @@ from ..compat import tfv1 as tf
 from tabulate import tabulate
 from termcolor import colored
 
+from .common import get_op_tensor_name
 from ..utils import logger
 
 __all__ = []
 
 
-# TODO should also describe model_variables
 def describe_trainable_vars():
     """
     Print a description of the current model parameters.
@@ -39,7 +39,7 @@ def describe_trainable_vars():
 
         total += ele
         total_bytes += ele * v.dtype.size
-        data.append([v.name, shape, ele, v.device, v.dtype.base_dtype.name])
+        data.append([get_op_tensor_name(v.name)[0], shape, ele, v.device, v.dtype.base_dtype.name])
     headers = ['name', 'shape', '#elements', 'device', 'dtype']
 
     dtypes = list(set([x[4] for x in data]))
@@ -79,9 +79,8 @@ def get_shape_str(tensors):
     if isinstance(tensors, (list, tuple)):
         for v in tensors:
             assert isinstance(v, (tf.Tensor, tf.Variable)), "Not a tensor: {}".format(type(v))
-        shape_str = ",".join(
-            map(lambda x: str(x.get_shape().as_list()), tensors))
+        shape_str = ", ".join(map(get_shape_str, tensors))
     else:
         assert isinstance(tensors, (tf.Tensor, tf.Variable)), "Not a tensor: {}".format(type(tensors))
-        shape_str = str(tensors.get_shape().as_list())
+        shape_str = str(tensors.get_shape().as_list()).replace("None", "?")
     return shape_str
