@@ -437,8 +437,6 @@ def get_eval_dataflow(name, shard=0, num_shards=1):
     # no filter for training
     ds = DataFromListOfDict(roidbs[img_range[0]: img_range[1]], ["file_name", "image_id"])
 
-    print(ds)
-
     def f(fname):
         im = cv2.imread(fname, cv2.IMREAD_COLOR)
         assert im is not None, fname
