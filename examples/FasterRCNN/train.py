@@ -125,7 +125,7 @@ if __name__ == '__main__':
     )
     if is_horovod:
         trainer = HorovodTrainer(average=False)
-    elif cfg.TRAINER == 'replicated' && cfg.TRAIN.NUM_GPUS > 0:
+    elif cfg.TRAINER == 'replicated' and cfg.TRAIN.NUM_GPUS > 0:
         # nccl mode appears faster than cpu mode
         trainer = SyncMultiGPUTrainerReplicated(cfg.TRAIN.NUM_GPUS, average=False, mode='nccl')
     else:
