@@ -293,4 +293,5 @@ class EvalCallback(Callback):
     def _trigger_epoch(self):
         if self.epoch_num in self.epochs_to_eval:
             logger.info("Running evaluation ...")
+            gc.collect()
             self._eval()
