@@ -85,9 +85,9 @@ _C.MODE_FPN = False
 # dataset -----------------------
 _C.DATA.BASEDIR = os.path.abspath(r'/home/plygradlinux/Datasets/syntheticShapes1')
 # All TRAIN dataset will be concatenated for training.
-_C.DATA.TRAIN = ('shapes_train', )   # i.e. trainval35k, AKA train2017
+_C.DATA.TRAIN = ('wood_train', )   # i.e. trainval35k, AKA train2017
 # Each VAL dataset will be evaluated separately (instead of concatenated)
-_C.DATA.VAL = ('shapes_val', )  # AKA val2017
+_C.DATA.VAL = ('wood_val', )  # AKA val2017
 # This two config will be populated later by the dataset loader:
 _C.DATA.NUM_CATEGORY = 3  # without the background class (e.g., 80 for COCO)
 _C.DATA.CLASS_NAMES = []  # NUM_CLASS (NUM_CATEGORY+1) strings, the first is "BG".
@@ -135,7 +135,7 @@ _C.TRAIN.LR_SCHEDULE = [120000, 160000, 180000]      # "1x" schedule in detectro
 # Longer schedules for from-scratch training (https://arxiv.org/abs/1811.08883):
 # _C.TRAIN.LR_SCHEDULE = [960000, 1040000, 1080000]    # "6x" schedule in detectron
 # _C.TRAIN.LR_SCHEDULE = [1500000, 1580000, 1620000]   # "9x" schedule in detectron
-_C.TRAIN.EVAL_PERIOD = 25  # period (epochs) to run evaluation
+_C.TRAIN.EVAL_PERIOD = 2000  # period (epochs) to run evaluation
 
 # preprocessing --------------------
 # Alternative old (worse & faster) setting: 600

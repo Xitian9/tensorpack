@@ -12,7 +12,7 @@ from tensorpack.callbacks.prof import *
 from tensorpack.tfutils import collect_env_info
 from tensorpack.tfutils.common import get_tf_version_tuple
 
-from dataset import register_coco, register_shapes
+from dataset import register_coco, register_shapes, register_wood
 from config import config as cfg
 from config import finalize_configs
 from data import get_train_dataflow
@@ -44,7 +44,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     if args.config:
         cfg.update_args(args.config)
-    register_shapes(cfg.DATA.BASEDIR)  # add datasets to the registry
+    register_wood(cfg.DATA.BASEDIR)  # add datasets to the registry
 
     # Setup logger ...
     is_horovod = cfg.TRAINER == 'horovod'
