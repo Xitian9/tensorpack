@@ -81,14 +81,14 @@ class WoodDetection(DatasetSplit):
 
                 curBoxes.append([np.float32(row["x1"]), np.float32(row["y1"]),
                                  np.float32(row["x2"]), np.float32(row["y2"])])
-                if row["class"] == "1":
+                if row["class"] == 1:
                     if row["area"] < 200:
                       curClasses.append(1)
                     elif row["area"] < 350:
                       curClasses.append(2)
                     else:
                       curClasses.append(3)
-                elif row["class"] == "2":
+                elif row["class"] == 2:
                     if row["area"] < 22:
                       curClasses.append(4)
                     elif row["area"] < 30:
