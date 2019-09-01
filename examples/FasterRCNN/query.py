@@ -46,7 +46,7 @@ if __name__ == '__main__':
         cfg.update_args(args.config)
     # register_wood(cfg.DATA.BASEDIR)  # add datasets to the registry
 
-    finalize_configs()
+    finalize_configs(is_training=True)
 
     # Create model and callbacks ...
     MODEL = ResNetFPNModel() if cfg.MODE_FPN else ResNetC4Model()
