@@ -17,7 +17,7 @@ from tensorpack.predict import MultiTowerOfflinePredictor, OfflinePredictor, Pre
 from tensorpack.tfutils import get_model_loader, get_tf_version_tuple
 from tensorpack.utils import fs, logger
 
-from dataset import DatasetRegistry, register_coco, register_shapes
+from dataset import DatasetRegistry, register_coco, register_shapes, register_wood
 from config import config as cfg
 from config import finalize_configs
 from data import get_eval_dataflow, get_train_dataflow
