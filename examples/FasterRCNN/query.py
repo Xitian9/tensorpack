@@ -51,7 +51,7 @@ if __name__ == '__main__':
     # Create model and callbacks ...
     MODEL = ResNetFPNModel() if cfg.MODE_FPN else ResNetC4Model()
 
-    MODEL.get_infernce_tensor_names()
+    MODEL.get_inference_tensor_names()
 
     #if is_horovod and hvd.rank() > 0:
     #    session_init = None
