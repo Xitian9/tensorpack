@@ -48,10 +48,15 @@ if __name__ == '__main__':
 
     finalize_configs(is_training=True)
 
-    # Create model and callbacks ...
+    # Create model
     MODEL = ResNetFPNModel() if cfg.MODE_FPN else ResNetC4Model()
 
-    MODEL.get_inference_tensor_names()
+    if args.load:
+         session_init = get_model_loader(args.load)
+    else:
+         session_init = get_model_loader(cfg.BACKBONE.WEIGHTS) if cfg.BACKBONE.WEIGHTS else None
+
+    print([m.values() for m in session_init.graph.get_operations()])
 
     #if is_horovod and hvd.rank() > 0:
     #    session_init = None
