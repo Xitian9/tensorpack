@@ -117,7 +117,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     if args.config:
         cfg.update_args(args.config)
-    register_shapes(cfg.DATA.BASEDIR)  # add COCO datasets to the registry
+    register_wood(cfg.DATA.BASEDIR)  # add COCO datasets to the registry
     MODEL = ResNetFPNModel() if cfg.MODE_FPN else ResNetC4Model()
 
     if not tf.test.is_gpu_available():
