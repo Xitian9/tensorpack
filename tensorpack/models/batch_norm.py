@@ -11,10 +11,11 @@ from ..tfutils.collection import backup_collection, restore_collection
 from ..tfutils.common import get_tf_version_tuple
 from ..tfutils.tower import get_current_tower_context
 from ..utils import logger
-from ..utils.argtools import get_data_format
+from ..utils.argtools import get_data_format, log_once
 from ..utils.develop import log_deprecated
 from .common import VariableHolder, layer_register
 from .tflayer import convert_to_tflayer_args, rename_get_variable
+from .utils import disable_autograph
 
 __all__ = ['BatchNorm', 'BatchRenorm']
 
@@ -37,6 +38,10 @@ def get_bn_variables(n_out, use_scale, use_bias, beta_init, gamma_init):
                                   initializer=tf.constant_initializer(), trainable=False)
     moving_var = tf.get_variable('variance/EMA', [n_out],
                                  initializer=tf.constant_initializer(1.0), trainable=False)
+
+    if get_current_tower_context().is_main_training_tower:
+        for v in [moving_mean, moving_var]:
+            tf.add_to_collection(tf.GraphKeys.MODEL_VARIABLES, v)
     return beta, gamma, moving_mean, moving_var
 
 
@@ -66,6 +71,7 @@ def internal_update_bn_ema(xn, batch_mean, batch_var,
         'decay': 'momentum',
         'use_local_stat': 'training'
     })
+@disable_autograph()
 def BatchNorm(inputs, axis=None, training=None, momentum=0.9, epsilon=1e-5,
               center=True, scale=True,
               beta_initializer=tf.zeros_initializer(),
@@ -210,7 +216,7 @@ def BatchNorm(inputs, axis=None, training=None, momentum=0.9, epsilon=1e-5,
         assert TF_version >= (1, 4), \
             "Fine tuning a BatchNorm model with fixed statistics needs TF>=1.4!"
         if ctx.is_main_training_tower:  # only warn in first tower
-            logger.warn("[BatchNorm] Using moving_mean/moving_variance in training.")
+            log_once("Some BatchNorm layer uses moving_mean/moving_variance in training.", func='warn')
         # Using moving_mean/moving_variance in training, which means we
         # loaded a pre-trained BN and only fine-tuning the affine part.
 
@@ -316,7 +322,7 @@ def BatchNorm(inputs, axis=None, training=None, momentum=0.9, epsilon=1e-5,
                 logger.warn("BatchNorm(sync_statistics='horovod') is used with only one process!")
             else:
                 import horovod
-                hvd_version = tuple(map(int, horovod.__version__.split('.')))
+                hvd_version = tuple(map(int, horovod.__version__.split('.')[:3]))
                 assert hvd_version >= (0, 13, 6), "sync_statistics=horovod needs horovod>=0.13.6 !"
 
                 batch_mean = hvd.allreduce(batch_mean, average=True)

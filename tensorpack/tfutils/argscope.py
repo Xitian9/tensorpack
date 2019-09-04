@@ -10,6 +10,7 @@ import tensorflow as tf
 
 from ..compat import is_tfv2
 from ..utils import logger
+from .model_utils import get_shape_str
 from .tower import get_current_tower_context
 
 __all__ = ['argscope', 'get_arg_scope', 'enable_argscope_for_module',
@@ -40,16 +41,11 @@ def argscope(layers, **kwargs):
     if not isinstance(layers, list):
         layers = [layers]
 
-    # def _check_args_exist(l):
-    #     args = inspect.getargspec(l).args
-    #     for k, v in six.iteritems(kwargs):
-    #         assert k in args, "No argument {} in {}".format(k, l.__name__)
-
     for l in layers:
-        assert hasattr(l, 'symbolic_function'), "{} is not a registered layer".format(l.__name__)
-        # _check_args_exist(l.symbolic_function)
+        assert hasattr(l, '__argscope_enabled__'), "Argscope not supported for {}".format(l)
 
-    new_scope = copy.copy(get_arg_scope())
+    # need to deepcopy so that changes to new_scope does not affect outer scope
+    new_scope = copy.deepcopy(get_arg_scope())
     for l in layers:
         new_scope[l.__name__].update(kwargs)
     _ArgScopeStack.append(new_scope)
@@ -113,13 +109,13 @@ def enable_argscope_for_function(func, log_shape=True):
                     out_tensor_descr = out_tensor[0]
                 else:
                     out_tensor_descr = out_tensor
-                logger.info('%20s: %20s -> %20s' %
-                            (name, in_tensor.shape.as_list(),
-                             out_tensor_descr.shape.as_list()))
+                logger.info("{:<12}: {} --> {}".format(
+                    "'" + name + "'",
+                    get_shape_str(in_tensor),
+                    get_shape_str(out_tensor_descr)))
 
         return out_tensor
-    # argscope requires this property
-    wrapped_func.symbolic_function = None
+    wrapped_func.__argscope_enabled__ = True
     return wrapped_func
 
 

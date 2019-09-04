@@ -100,8 +100,7 @@ class Model(ModelDesc):
         logits, value = self._get_NN_prediction(state)
         value = tf.squeeze(value, [1], name='pred_value')  # (B,)
         policy = tf.nn.softmax(logits, name='policy')
-        is_training = get_current_tower_context().is_training
-        if not is_training:
+        if not self.training:
             return
         log_probs = tf.log(policy + 1e-6)
 
@@ -139,12 +138,16 @@ class Model(ModelDesc):
 
 class MySimulatorMaster(SimulatorMaster, Callback):
     def __init__(self, pipe_c2s, pipe_s2c, gpus):
+        """
+        Args:
+            gpus (list[int]): the gpus used to run inference
+        """
         super(MySimulatorMaster, self).__init__(pipe_c2s, pipe_s2c)
         self.queue = queue.Queue(maxsize=BATCH_SIZE * 8 * 2)
         self._gpus = gpus
 
     def _setup_graph(self):
-        # create predictors on the available predictor GPUs.
+        # Create predictors on the available predictor GPUs.
         num_gpu = len(self._gpus)
         predictors = [self.trainer.get_predictor(
             ['state'], ['policy', 'pred_value'],
@@ -155,6 +158,8 @@ class MySimulatorMaster(SimulatorMaster, Callback):
 
     def _before_train(self):
         self.async_predictor.start()
+        logger.info("Starting MySimulatorMaster ...")
+        start_proc_mask_signal(self)
 
     def _on_state(self, state, client):
         """
@@ -208,6 +213,10 @@ class MySimulatorMaster(SimulatorMaster, Callback):
         else:
             client.memory = []
 
+    def get_training_dataflow(self):
+        # the queue contains batched experience
+        return BatchData(DataFromQueue(self.queue), BATCH_SIZE)
+
 
 def train():
     assert tf.test.is_gpu_available(), "Training requires GPUs!"
@@ -242,26 +251,21 @@ def train():
     start_proc_mask_signal(procs)
 
     master = MySimulatorMaster(namec2s, names2c, predict_tower)
-    dataflow = BatchData(DataFromQueue(master.queue), BATCH_SIZE)
     config = TrainConfig(
         model=Model(),
-        dataflow=dataflow,
+        dataflow=master.get_training_dataflow(),
         callbacks=[
             ModelSaver(),
             ScheduledHyperParamSetter('learning_rate', [(20, 0.0003), (120, 0.0001)]),
             ScheduledHyperParamSetter('entropy_beta', [(80, 0.005)]),
-            HumanHyperParamSetter('learning_rate'),
-            HumanHyperParamSetter('entropy_beta'),
             master,
-            StartProcOrThread(master),
             PeriodicTrigger(Evaluator(
                 EVAL_EPISODE, ['state'], ['policy'], get_player),
                 every_k_epochs=3),
         ],
-        session_creator=sesscreate.NewSessionCreator(
-            config=get_default_sess_config(0.5)),
+        session_creator=sesscreate.NewSessionCreator(config=get_default_sess_config(0.5)),
         steps_per_epoch=STEPS_PER_EPOCH,
-        session_init=get_model_loader(args.load) if args.load else None,
+        session_init=SmartInit(args.load),
         max_epoch=1000,
     )
     trainer = SimpleTrainer() if num_gpu == 1 else AsyncMultiGPUTrainer(train_tower)
@@ -290,7 +294,7 @@ if __name__ == '__main__':
         assert args.load is not None
         pred = OfflinePredictor(PredictConfig(
             model=Model(),
-            session_init=get_model_loader(args.load),
+            session_init=SmartInit(args.load),
             input_names=['state'],
             output_names=['policy']))
         if args.task == 'play':

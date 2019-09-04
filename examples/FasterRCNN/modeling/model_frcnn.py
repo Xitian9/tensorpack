@@ -51,11 +51,11 @@ def sample_fast_rcnn_targets(boxes, gt_boxes, gt_labels):
         gt_labels: m, int32
 
     Returns:
-        A BoxProposals instance.
-        sampled_boxes: tx4 floatbox, the rois
-        sampled_labels: t int64 labels, in [0, #class). Positive means foreground.
-        fg_inds_wrt_gt: #fg indices, each in range [0, m-1].
-            It contains the matching GT of each foreground roi.
+        A BoxProposals instance, with:
+            sampled_boxes: tx4 floatbox, the rois
+            sampled_labels: t int64 labels, in [0, #class). Positive means foreground.
+            fg_inds_wrt_gt: #fg indices, each in range [0, m-1].
+                It contains the matching GT of each foreground roi.
     """
     iou = pairwise_iou(boxes, gt_boxes)     # nxm
     proposal_metrics(iou)
@@ -66,7 +66,9 @@ def sample_fast_rcnn_targets(boxes, gt_boxes, gt_labels):
     # #proposal=n+m from now on
 
     def sample_fg_bg(iou):
-        fg_mask = tf.reduce_max(iou, axis=1) >= cfg.FRCNN.FG_THRESH
+        fg_mask = tf.cond(tf.shape(iou)[1] > 0,
+                          lambda: tf.reduce_max(iou, axis=1) >= cfg.FRCNN.FG_THRESH,
+                          lambda: tf.zeros([tf.shape(iou)[0]], dtype=tf.bool))
 
         fg_inds = tf.reshape(tf.where(fg_mask), [-1])
         num_fg = tf.minimum(int(
@@ -86,7 +88,9 @@ def sample_fast_rcnn_targets(boxes, gt_boxes, gt_labels):
     fg_inds, bg_inds = sample_fg_bg(iou)
     # fg,bg indices w.r.t proposals
 
-    best_iou_ind = tf.argmax(iou, axis=1)   # #proposal, each in 0~m-1
+    best_iou_ind = tf.cond(tf.shape(iou)[1] > 0,
+                           lambda: tf.argmax(iou, axis=1),   # #proposal, each in 0~m-1
+                           lambda: tf.zeros([tf.shape(iou)[0]], dtype=tf.int64))
     fg_inds_wrt_gt = tf.gather(best_iou_ind, fg_inds)   # num_fg
 
     all_indices = tf.concat([fg_inds, bg_inds], axis=0)   # indices w.r.t all n+m proposal boxes
@@ -147,11 +151,8 @@ def fastrcnn_losses(labels, label_logits, fg_boxes, fg_box_logits):
     num_fg = tf.size(fg_inds, out_type=tf.int64)
     empty_fg = tf.equal(num_fg, 0)
     if int(fg_box_logits.shape[1]) > 1:
-        indices = tf.stack(
-            [tf.range(num_fg), fg_labels], axis=1)  # #fgx2
-        fg_box_logits = tf.gather_nd(fg_box_logits, indices)
-    else:
-        fg_box_logits = tf.reshape(fg_box_logits, [-1, 4])
+        fg_box_logits = tf.batch_gather(fg_box_logits, tf.expand_dims(fg_labels, axis=1))
+    fg_box_logits = tf.reshape(fg_box_logits, [-1, 4])
 
     with tf.name_scope('label_metrics'), tf.device('/cpu:0'):
         prediction = tf.argmax(label_logits, axis=1, name='label_prediction')
@@ -191,59 +192,21 @@ def fastrcnn_predictions(boxes, scores):
     boxes = tf.transpose(boxes, [1, 0, 2])[1:, :, :]  # #catxnx4
     scores = tf.transpose(scores[:, 1:], [1, 0])  # #catxn
 
-    def f(X):
-        """
-        prob: n probabilities
-        box: nx4 boxes
-
-        Returns: n boolean, the selection
-        """
-        prob, box = X
-        output_shape = tf.shape(prob, out_type=tf.int64)
-        # filter by score threshold
-        ids = tf.reshape(tf.where(prob > cfg.TEST.RESULT_SCORE_THRESH), [-1])
-        prob = tf.gather(prob, ids)
-        box = tf.gather(box, ids)
-        # NMS within each class
-        selection = tf.image.non_max_suppression(
-            box, prob, cfg.TEST.RESULTS_PER_IM, cfg.TEST.FRCNN_NMS_THRESH)
-        selection = tf.gather(ids, selection)
-
-        if get_tf_version_tuple() >= (1, 13):
-            sorted_selection = tf.sort(selection, direction='ASCENDING')
-            mask = tf.sparse.SparseTensor(indices=tf.expand_dims(sorted_selection, 1),
-                                          values=tf.ones_like(sorted_selection, dtype=tf.bool),
-                                          dense_shape=output_shape)
-            mask = tf.sparse.to_dense(mask, default_value=False)
-        else:
-            # this function is deprecated by TF
-            sorted_selection = -tf.nn.top_k(-selection, k=tf.size(selection))[0]
-            mask = tf.sparse_to_dense(
-                sparse_indices=sorted_selection,
-                output_shape=output_shape,
-                sparse_values=True,
-                default_value=False)
-        return mask
-
-    # TF bug in version 1.11, 1.12: https://github.com/tensorflow/tensorflow/issues/22750
-    buggy_tf = get_tf_version_tuple() in [(1, 11), (1, 12)]
-    masks = tf.map_fn(f, (scores, boxes), dtype=tf.bool,
-                      parallel_iterations=1 if buggy_tf else 10)     # #cat x N
-    selected_indices = tf.where(masks)  # #selection x 2, each is (cat_id, box_id)
-    scores = tf.boolean_mask(scores, masks)
-
-    # filter again by sorting scores
-    topk_scores, topk_indices = tf.nn.top_k(
-        scores,
-        tf.minimum(cfg.TEST.RESULTS_PER_IM, tf.size(scores)),
-        sorted=False)
-    filtered_selection = tf.gather(selected_indices, topk_indices)
-    cat_ids, box_ids = tf.unstack(filtered_selection, axis=1)
-
-    final_scores = tf.identity(topk_scores, name='scores')
-    final_labels = tf.add(cat_ids, 1, name='labels')
-    final_ids = tf.stack([cat_ids, box_ids], axis=1, name='all_ids')
-    final_boxes = tf.gather_nd(boxes, final_ids, name='boxes')
+    max_coord = tf.reduce_max(boxes)
+    filtered_ids = tf.where(scores > cfg.TEST.RESULT_SCORE_THRESH)  # Fx2
+    filtered_boxes = tf.gather_nd(boxes, filtered_ids)  # Fx4
+    filtered_scores = tf.gather_nd(scores, filtered_ids)  # F,
+    cls_per_box = tf.slice(filtered_ids, [0, 0], [-1, 1])
+    offsets = tf.cast(cls_per_box, tf.float32) * (max_coord + 1)  # F,1
+    nms_boxes = filtered_boxes + offsets
+    selection = tf.image.non_max_suppression(
+        nms_boxes,
+        filtered_scores,
+        cfg.TEST.RESULTS_PER_IM,
+        cfg.TEST.FRCNN_NMS_THRESH)
+    final_scores = tf.gather(filtered_scores, selection, name='scores')
+    final_labels = tf.add(tf.gather(cls_per_box[:, 0], selection), 1, name='labels')
+    final_boxes = tf.gather(filtered_boxes, selection, name='boxes')
     return final_boxes, final_scores, final_labels
 
 

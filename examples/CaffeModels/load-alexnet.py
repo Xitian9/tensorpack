@@ -5,7 +5,6 @@
 
 from __future__ import print_function
 import argparse
-import numpy as np
 import os
 import cv2
 import tensorflow as tf
@@ -13,7 +12,6 @@ import tensorflow as tf
 from tensorpack import *
 from tensorpack.dataflow.dataset import ILSVRCMeta
 from tensorpack.tfutils.summary import *
-from tensorpack.tfutils.symbolic_functions import *
 
 
 def tower_func(image):
@@ -40,11 +38,10 @@ def tower_func(image):
 
 
 def run_test(path, input):
-    param_dict = dict(np.load(path))
     predictor = OfflinePredictor(PredictConfig(
         input_signature=[tf.TensorSpec((None, 227, 227, 3), tf.float32, 'input')],
         tower_func=tower_func,
-        session_init=DictRestore(param_dict),
+        session_init=SmartInit(path),
         input_names=['input'],
         output_names=['prob']
     ))

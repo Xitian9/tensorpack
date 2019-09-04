@@ -14,7 +14,6 @@ from tensorpack import *
 from tensorpack.dataflow import dataset
 from tensorpack.tfutils import gradproc, optimizer
 from tensorpack.tfutils.summary import *
-from tensorpack.tfutils.symbolic_functions import *
 from tensorpack.utils import viz
 from tensorpack.utils.gpu import get_num_gpu
 
@@ -98,7 +97,7 @@ def viz_cam(model_file, data_dir):
     ds = get_data('val')
     pred_config = PredictConfig(
         model=Model(),
-        session_init=get_model_loader(model_file),
+        session_init=SmartInit(model_file),
         input_names=['input', 'label'],
         output_names=['wrong-top1', 'group3new/bnlast/Relu', 'linearnew/W'],
         return_input=True
@@ -152,6 +151,5 @@ if __name__ == '__main__':
 
     logger.auto_set_dir()
     config = get_config()
-    if args.load:
-        config.session_init = get_model_loader(args.load)
+    config.session_init = SmartInit(args.load)
     launch_train_with_config(config, SyncMultiGPUTrainerParameterServer(num_gpu))

@@ -8,18 +8,17 @@ import threading
 import cv2
 import gym
 import six
-from ale_python_interface import ALEInterface
+from atari_py.ale_python_interface import ALEInterface
 from gym import spaces
 from gym.envs.atari.atari_env import ACTION_MEANING
 from six.moves import range
 
-from tensorpack.utils import logger
+from tensorpack.utils import logger, execute_only_once, get_rng
 from tensorpack.utils.fs import get_dataset_path
-from tensorpack.utils.utils import execute_only_once, get_rng
 
 __all__ = ['AtariPlayer']
 
-ROM_URL = "https://github.com/openai/atari-py/tree/master/atari_py/atari_roms"
+ROM_URL = "https://github.com/openai/atari-py/tree/gdb/atari_py/atari_roms"
 _ALE_LOCK = threading.Lock()
 
 
@@ -51,7 +50,7 @@ class AtariPlayer(gym.Env):
         if not os.path.isfile(rom_file) and '/' not in rom_file:
             rom_file = get_dataset_path('atari_rom', rom_file)
         assert os.path.isfile(rom_file), \
-            "rom {} not found. Please download at {}".format(rom_file, ROM_URL)
+            "ROM {} not found. Please download at {}".format(rom_file, ROM_URL)
 
         try:
             ALEInterface.setLoggerMode(ALEInterface.Logger.Error)

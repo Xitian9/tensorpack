@@ -9,12 +9,13 @@ from tensorpack.tfutils.argscope import argscope
 from tensorpack.tfutils.scope_utils import under_name_scope
 from tensorpack.tfutils.summary import add_moving_summary
 from tensorpack.tfutils.tower import get_current_tower_context
+from tensorpack.utils.argtools import memoized
 
 from config import config as cfg
 from utils.box_ops import area as tf_area
 from .backbone import GroupNorm
 from .model_box import roi_align
-from .model_rpn import generate_rpn_proposals, rpn_losses
+from .model_rpn import generate_rpn_proposals, rpn_losses, get_all_anchors
 
 
 @layer_register(log_shape=True)
@@ -32,17 +33,18 @@ def fpn_model(features):
     use_gn = cfg.FPN.NORM == 'GN'
 
     def upsample2x(name, x):
-        return FixedUnPooling(
-            name, x, 2, unpool_mat=np.ones((2, 2), dtype='float32'),
-            data_format='channels_first')
-
-        # tf.image.resize is, again, not aligned.
-        # with tf.name_scope(name):
-        #     shape2d = tf.shape(x)[2:]
-        #     x = tf.transpose(x, [0, 2, 3, 1])
-        #     x = tf.image.resize_nearest_neighbor(x, shape2d * 2, align_corners=True)
-        #     x = tf.transpose(x, [0, 3, 1, 2])
-        #     return x
+        try:
+            resize = tf.compat.v2.image.resize_images
+            with tf.name_scope(name):
+                shp2d = tf.shape(x)[2:]
+                x = tf.transpose(x, [0, 2, 3, 1])
+                x = resize(x, shp2d * 2, 'nearest')
+                x = tf.transpose(x, [0, 3, 1, 2])
+                return x
+        except AttributeError:
+            return FixedUnPooling(
+                name, x, 2, unpool_mat=np.ones((2, 2), dtype='float32'),
+                data_format='channels_first')
 
     with argscope(Conv2D, data_format='channels_first',
                   activation=tf.identity, use_bias=True,
@@ -217,3 +219,17 @@ def generate_fpn_proposals(
     tf.sigmoid(proposal_scores, name='probs')  # for visualization
     return tf.stop_gradient(proposal_boxes, name='boxes'), \
         tf.stop_gradient(proposal_scores, name='scores')
+
+
+@memoized
+def get_all_anchors_fpn(*, strides, sizes, ratios, max_size):
+    """
+    Returns:
+        [anchors]: each anchors is a SxSx NUM_ANCHOR_RATIOS x4 array.
+    """
+    assert len(strides) == len(sizes)
+    foas = []
+    for stride, size in zip(strides, sizes):
+        foa = get_all_anchors(stride=stride, sizes=(size,), ratios=ratios, max_size=max_size)
+        foas.append(foa)
+    return foas

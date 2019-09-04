@@ -20,9 +20,8 @@ def maskrcnn_loss(mask_logits, fg_labels, fg_target_masks):
         fg_labels: #fg, in 1~#class, int64
         fg_target_masks: #fgxhxw, float32
     """
-    num_fg = tf.size(fg_labels, out_type=tf.int64)
-    indices = tf.stack([tf.range(num_fg), fg_labels - 1], axis=1)  # #fgx2
-    mask_logits = tf.gather_nd(mask_logits, indices)  # #fgxhxw
+    mask_logits = tf.batch_gather(mask_logits, tf.reshape(fg_labels, [-1, 1]) - 1)
+    mask_logits = tf.squeeze(mask_logits, axis=1)
     mask_probs = tf.sigmoid(mask_logits)
 
     # add some training visualizations to tensorboard
@@ -75,7 +74,7 @@ def maskrcnn_upXconv_head(feature, num_category, num_convs, norm=None):
             if norm is not None:
                 l = GroupNorm('gn{}'.format(k), l)
         l = Conv2DTranspose('deconv', l, cfg.MRCNN.HEAD_DIM, 2, strides=2, activation=tf.nn.relu)
-        l = Conv2D('conv', l, num_category, 1)
+        l = Conv2D('conv', l, num_category, 1, kernel_initializer=tf.random_normal_initializer(stddev=0.001))
     return l
 
 
@@ -102,5 +101,5 @@ def unpackbits_masks(masks):
     unpacked = tf.bitwise.bitwise_and(tf.expand_dims(masks, -1), bits) > 0
     unpacked = tf.reshape(
         unpacked,
-        tf.concat([tf.shape(masks)[:-1], [-1]], axis=0))
+        tf.concat([tf.shape(masks)[:-1], [8 * tf.shape(masks)[-1]]], axis=0))
     return unpacked

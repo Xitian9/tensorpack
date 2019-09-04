@@ -7,11 +7,12 @@ import tensorflow as tf
 from ..callbacks import (
     JSONWriter, MergeAllSummaries, MovingAverageSummary, ProgressBar, RunUpdateOps, ScalarPrinter, TFEventWriter)
 from ..dataflow.base import DataFlow
-from ..graph_builder.model_desc import ModelDescBase
 from ..input_source import InputSource
 from ..tfutils.sesscreate import NewSessionCreator
 from ..tfutils.sessinit import SaverRestore, SessionInit
 from ..utils import logger
+
+from .model_desc import ModelDescBase
 
 __all__ = ['TrainConfig', 'AutoResumeTrainConfig', 'DEFAULT_CALLBACKS', 'DEFAULT_MONITORS']
 
@@ -176,9 +177,14 @@ class AutoResumeTrainConfig(TrainConfig):
 
     Note that the functionality requires the logging directory to obtain
     necessary information from a previous run.
-    In some cases (e.g. when using Horovod), the directory is not
-    available, or the directories are different for different workers,
-    then this class may not function properly.
+    If you have unconventional setup of logging directory, this class will not
+    work for you, for example:
+
+        1. If you save the checkpoint to a different directory rather than the
+           logging directory.
+
+        2. If in distributed training the directory is not
+           available to every worker, or the directories are different for different workers.
     """
     def __init__(self, always_resume=True, **kwargs):
         """
@@ -189,7 +195,7 @@ class AutoResumeTrainConfig(TrainConfig):
             kwargs: same as in :class:`TrainConfig`.
 
         Note:
-            The main goal of this class is to let a training job to resume
+            The main goal of this class is to let a training job resume
             without changing any line of code or command line arguments.
             So it's useful to let resume take priority over user-provided arguments sometimes.
 

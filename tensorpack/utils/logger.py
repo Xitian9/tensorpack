@@ -56,7 +56,7 @@ def _getlogger():
 
 
 _logger = _getlogger()
-_LOGGING_METHOD = ['info', 'warning', 'error', 'critical', 'exception', 'debug', 'setLevel']
+_LOGGING_METHOD = ['info', 'warning', 'error', 'critical', 'exception', 'debug', 'setLevel', 'addFilter']
 # export logger functions
 for func in _LOGGING_METHOD:
     locals()[func] = getattr(_logger, func)
@@ -109,6 +109,7 @@ def set_logger_dir(dirname, action=None):
                 old states for you. It simply does nothing.
 
     """
+    dirname = os.path.normpath(dirname)
     global LOG_DIR, _FILE_HANDLER
     if _FILE_HANDLER:
         # unload and close the old file handler, so that we may safely delete the logger directory

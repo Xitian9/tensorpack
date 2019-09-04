@@ -14,14 +14,16 @@ from tensorpack.dataflow import (
     MultiProcessMapData, MultiThreadMapData, TestDataSpeed, imgaug,
 )
 from tensorpack.utils import logger
-from tensorpack.utils.argtools import log_once, memoized
+from tensorpack.utils.argtools import log_once
 
+from modeling.model_rpn import get_all_anchors
+from modeling.model_fpn import get_all_anchors_fpn
 from common import (
     CustomResize, DataFromListOfDict, box_to_point8,
-    filter_boxes_inside_shape, np_iou, point8_to_box, segmentation_to_mask,
+    filter_boxes_inside_shape, np_iou, point8_to_box, polygons_to_mask,
 )
 from config import config as cfg
-from dataset import DatasetRegistry
+from dataset import DatasetRegistry, register_coco
 from utils.np_box_ops import area as np_area
 from utils.np_box_ops import ioa as np_ioa
 
@@ -37,6 +39,7 @@ def print_class_histogram(roidbs):
     Args:
         roidbs (list[dict]): the same format as the output of `training_roidbs`.
     """
+    class_names = DatasetRegistry.get_metadata(cfg.DATA.TRAIN[0], 'class_names')
     # labels are in [1, NUM_CATEGORY], hence +2 for bins
     hist_bins = np.arange(cfg.DATA.NUM_CATEGORY + 2)
 
@@ -47,69 +50,15 @@ def print_class_histogram(roidbs):
         gt_inds = np.where((entry["class"] > 0) & (entry["is_crowd"] == 0))[0]
         gt_classes = entry["class"][gt_inds]
         gt_hist += np.histogram(gt_classes, bins=hist_bins)[0]
-    data = [[cfg.DATA.CLASS_NAMES[i], v] for i, v in enumerate(gt_hist)]
-    data.append(["total", sum(x[1] for x in data)])
+    data = list(itertools.chain(*[[class_names[i + 1], v] for i, v in enumerate(gt_hist[1:])]))
+    COL = min(6, len(data))
+    total_instances = sum(data[1::2])
+    data.extend([None] * ((COL - len(data) % COL) % COL))
+    data.extend(["total", total_instances])
+    data = itertools.zip_longest(*[data[i::COL] for i in range(COL)])
     # the first line is BG
-    table = tabulate(data[1:], headers=["class", "#box"], tablefmt="pipe")
-    logger.info("Ground-Truth Boxes:\n" + colored(table, "cyan"))
-
-
-@memoized
-def get_all_anchors(*, stride, sizes, ratios, max_size):
-    """
-    Get all anchors in the largest possible image, shifted, floatbox
-    Args:
-        stride (int): the stride of anchors.
-        sizes (tuple[int]): the sizes (sqrt area) of anchors
-        ratios (tuple[int]): the aspect ratios of anchors
-        max_size (int): maximum size of input image
-
-    Returns:
-        anchors: SxSxNUM_ANCHORx4, where S == ceil(MAX_SIZE/STRIDE), floatbox
-        The layout in the NUM_ANCHOR dim is NUM_RATIO x NUM_SIZE.
-
-    """
-    # Generates a NAx4 matrix of anchor boxes in (x1, y1, x2, y2) format. Anchors
-    # are centered on 0, have sqrt areas equal to the specified sizes, and aspect ratios as given.
-    anchors = []
-    for sz in sizes:
-        for ratio in ratios:
-            w = np.sqrt(sz * sz / ratio)
-            h = ratio * w
-            anchors.append([-w, -h, w, h])
-    cell_anchors = np.asarray(anchors) * 0.5
-
-    field_size = int(np.ceil(max_size / stride))
-    shifts = (np.arange(0, field_size) * stride).astype("float32")
-    shift_x, shift_y = np.meshgrid(shifts, shifts)
-    shift_x = shift_x.flatten()
-    shift_y = shift_y.flatten()
-    shifts = np.vstack((shift_x, shift_y, shift_x, shift_y)).transpose()
-    # Kx4, K = field_size * field_size
-    K = shifts.shape[0]
-
-    A = cell_anchors.shape[0]
-    field_of_anchors = cell_anchors.reshape((1, A, 4)) + shifts.reshape((1, K, 4)).transpose((1, 0, 2))
-    field_of_anchors = field_of_anchors.reshape((field_size, field_size, A, 4))
-    # FSxFSxAx4
-    # Many rounding happens inside the anchor code anyway
-    # assert np.all(field_of_anchors == field_of_anchors.astype('int32'))
-    field_of_anchors = field_of_anchors.astype("float32")
-    return field_of_anchors
-
-
-@memoized
-def get_all_anchors_fpn(*, strides, sizes, ratios, max_size):
-    """
-    Returns:
-        [anchors]: each anchors is a SxSx NUM_ANCHOR_RATIOS x4 array.
-    """
-    assert len(strides) == len(sizes)
-    foas = []
-    for stride, size in zip(strides, sizes):
-        foa = get_all_anchors(stride=stride, sizes=(size,), ratios=ratios, max_size=max_size)
-        foas.append(foa)
-    return foas
+    table = tabulate(data, headers=["class", "#box"] * (COL // 2), tablefmt="pipe", stralign="center", numalign="left")
+    logger.info("Ground-Truth category distribution:\n" + colored(table, "cyan"))
 
 
 class TrainingDataPreprocessor:
@@ -122,30 +71,34 @@ class TrainingDataPreprocessor:
 
     def __init__(self, cfg):
         self.cfg = cfg
-        self.aug = imgaug.AugmentorList(
-            [CustomResize(cfg.PREPROC.TRAIN_SHORT_EDGE_SIZE, cfg.PREPROC.MAX_SIZE), imgaug.Flip(horiz=True)]
-        )
+        self.aug = imgaug.AugmentorList([
+            CustomResize(cfg.PREPROC.TRAIN_SHORT_EDGE_SIZE, cfg.PREPROC.MAX_SIZE),
+            imgaug.Flip(horiz=True)
+        ])
 
     def __call__(self, roidb):
         fname, boxes, klass, is_crowd = roidb["file_name"], roidb["boxes"], roidb["class"], roidb["is_crowd"]
+        assert boxes.ndim == 2 and boxes.shape[1] == 4, boxes.shape
         boxes = np.copy(boxes)
         im = cv2.imread(fname, cv2.IMREAD_COLOR)
         assert im is not None, fname
         im = im.astype("float32")
         height, width = im.shape[:2]
         # assume floatbox as input
-        assert boxes.dtype == np.float32, "Loader has to return floating point boxes!"
+        assert boxes.dtype == np.float32, "Loader has to return float32 boxes!"
 
         if not self.cfg.DATA.ABSOLUTE_COORD:
             boxes[:, 0::2] *= width
             boxes[:, 1::2] *= height
 
         # augmentation:
-        im, params = self.aug.augment_return_params(im)
+        tfms = self.aug.get_transform(im)
+        im = tfms.apply_image(im)
         points = box_to_point8(boxes)
-        points = self.aug.augment_coords(points, params)
+        points = tfms.apply_coords(points)
         boxes = point8_to_box(points)
-        assert np.min(np_area(boxes)) > 0, "Some boxes have zero area!"
+        if len(boxes):
+            assert np.min(np_area(boxes)) > 0, "Some boxes have zero area!"
 
         ret = {"image": im}
         # Add rpn data to dataflow:
@@ -162,8 +115,6 @@ class TrainingDataPreprocessor:
             klass = klass[is_crowd == 0]
             ret["gt_boxes"] = boxes
             ret["gt_labels"] = klass
-            if not len(boxes):
-                raise MalformedData("No valid gt_boxes!")
         except MalformedData as e:
             log_once("Input {} is filtered for training: {}".format(fname, str(e)), "warn")
             return None
@@ -179,13 +130,19 @@ class TrainingDataPreprocessor:
             masks = []
             width_height = np.asarray([width, height], dtype=np.float32)
             gt_mask_width = int(np.ceil(im.shape[1] / 8.0) * 8)   # pad to 8 in order to pack mask into bits
+
             for polys in segmentation:
                 if not self.cfg.DATA.ABSOLUTE_COORD:
                     polys = [p * width_height for p in polys]
-                polys = [self.aug.augment_coords(p, params) for p in polys]
-                masks.append(segmentation_to_mask(polys, im.shape[0], gt_mask_width))
-            masks = np.asarray(masks, dtype='uint8')    # values in {0, 1}
-            masks = np.packbits(masks, axis=-1)
+                polys = [tfms.apply_coords(p) for p in polys]
+                masks.append(polygons_to_mask(polys, im.shape[0], gt_mask_width))
+
+            if len(masks):
+                masks = np.asarray(masks, dtype='uint8')    # values in {0, 1}
+                masks = np.packbits(masks, axis=-1)
+            else:  # no gt on the image
+                masks = np.zeros((0, im.shape[0], gt_mask_width // 8), dtype='uint8')
+
             ret['gt_masks_packed'] = masks
 
             # from viz import draw_annotation, draw_mask
@@ -238,6 +195,7 @@ class TrainingDataPreprocessor:
         featuremap_boxes = featuremap_boxes.reshape((anchorH, anchorW, num_anchor, 4))
         return featuremap_labels, featuremap_boxes
 
+    # TODO: can probably merge single-level logic with FPN logic to simplify code
     def get_multilevel_rpn_anchor_input(self, im, boxes, is_crowd):
         """
         Args:
@@ -263,6 +221,7 @@ class TrainingDataPreprocessor:
         all_anchors_flatten = np.concatenate(flatten_anchors_per_level, axis=0)
 
         inside_ind, inside_anchors = filter_boxes_inside_shape(all_anchors_flatten, im.shape[:2])
+
         anchor_labels, anchor_gt_boxes = self.get_anchor_labels(
             inside_anchors, boxes[is_crowd == 0], boxes[is_crowd == 1]
         )
@@ -310,7 +269,12 @@ class TrainingDataPreprocessor:
             return curr_inds
 
         NA, NB = len(anchors), len(gt_boxes)
-        assert NB > 0  # empty images should have been filtered already
+        if NB == 0:
+            # No groundtruth. All anchors are either background or ignored.
+            anchor_labels = np.zeros((NA,), dtype="int32")
+            filter_box_label(anchor_labels, 0, self.cfg.RPN.BATCH_PER_IM)
+            return anchor_labels, np.zeros((NA, 4), dtype="float32")
+
         box_ious = np_iou(anchors, gt_boxes)  # NA x NB
         ious_argmax_per_anchor = box_ious.argmax(axis=1)  # NA,
         ious_max_per_anchor = box_ious.max(axis=1)
@@ -372,12 +336,11 @@ def get_train_dataflow():
 
     If MODE_MASK, gt_masks: (N, h, w)
     """
-
     roidbs = list(itertools.chain.from_iterable(DatasetRegistry.get(x).training_roidbs() for x in cfg.DATA.TRAIN))
     print_class_histogram(roidbs)
 
-    # Valid training images should have at least one fg box.
-    # But this filter shall not be applied for testing.
+    # Filter out images that have no gt boxes, but this filter shall not be applied for testing.
+    # The model does support training with empty images, but it is not useful for COCO.
     num = len(roidbs)
     roidbs = list(filter(lambda img: len(img["boxes"][img["is_crowd"] == 0]) > 0, roidbs))
     logger.info(
@@ -436,11 +399,12 @@ def get_eval_dataflow(name, shard=0, num_shards=1):
 if __name__ == "__main__":
     import os
     from tensorpack.dataflow import PrintData
+    from config import finalize_configs
 
-    cfg.DATA.BASEDIR = os.path.expanduser("~/data/coco")
+    register_coco(os.path.expanduser("~/data/coco"))
+    finalize_configs()
     ds = get_train_dataflow()
-    ds = PrintData(ds, 100)
+    ds = PrintData(ds, 10)
     TestDataSpeed(ds, 50000).start()
-    ds.reset_state()
     for k in ds:
         pass

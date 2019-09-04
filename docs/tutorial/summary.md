@@ -8,10 +8,10 @@ The default logging behavior should be good enough for normal use cases, so you 
 
 This is how TensorFlow summaries eventually get logged/saved/printed:
 
-1. __What to Log__: Define what you want to log in the graph. 
+1. __What to Log__: Define what you want to log in the graph, by just calling `tf.summary.xxx`.
    When you call `tf.summary.xxx` in your graph code, TensorFlow adds an op to
 	`tf.GraphKeys.SUMMARIES` collection (by default).
-   Tensorpack further removes summaries not from the first training tower.
+   Tensorpack will further remove summaries (in the default collection) not from the first training tower.
 2. __When to Log__: [MergeAllSummaries](../modules/callbacks.html#tensorpack.callbacks.MergeAllSummaries)
 	callback is one of the [default callbacks](../modules/train.html#tensorpack.train.DEFAULT_CALLBACKS).
 	It runs ops in the `tf.GraphKeys.SUMMARIES` collection (by default) every epoch (by default),
@@ -25,28 +25,31 @@ This is how TensorFlow summaries eventually get logged/saved/printed:
 	* A [JSONWriter](../modules/callbacks.html#tensorpack.callbacks.JSONWriter)
 		saves scalars to a JSON file.
 
-All the "what, when, where" can be customized in either the graph or with the callbacks/monitors setting.
-You can call `tf.summary.xxx(collections=[...])` to add your custom summaries a different collection,
-and use the `MergeAllSummaries(key=...)` callback to write them to monitors.
+All the "what, when, where" can be customized in either the graph or with the callbacks/monitors setting:
+
+1. You can call `tf.summary.xxx(collections=[...])` to add your custom summaries a different collection.
+1. You can use the `MergeAllSummaries(key=...)` callback to write a different collection of summaries to monitors.
+1. You can use `PeriodicCallback` or `MergeAllSummaries(period=...)` to make the callback execute less or more frequent.
+1. You can tell the trainer to use different monitors.
 
 The design goal to disentangle "what, when, where" is to make components reusable.
-Suppose you have `M` items to log 
+Suppose you have `M` items to log
 (possibly from differently places, not necessarily the graph)
 and `N` backends to log your data to, you
 automatically obtain all the `MxN` combinations.
 
-Despite of that, if you only care about logging one specific item (e.g. for
-debugging purpose), you can check out the 
+Despite of that, if you only care about logging one specific tensor in the graph (e.g. for
+debugging purpose), you can check out the
 [FAQ](http://tensorpack.readthedocs.io/tutorial/faq.html#how-to-print-dump-intermediate-results-in-training)
 for easier options.
 
 ### Noisy TensorFlow Summaries
 
 Since TF summaries are evaluated infrequently (every epoch) by default,
-if the content is data-dependent (e.g., training loss), 
+if the content is data-dependent (e.g., training loss),
 the infrequently-sampled values could have high variance.
 To address this issue, you can:
-1. Change "When to Log": log more frequently, but note that certain summaries can be expensive to
+1. Change "When to Log": log more frequently, but note that certain large summaries can be expensive to
   log. You may want to use a separate collection for frequent logging.
 2. Change "What to Log": you can call
   [tfutils.summary.add_moving_summary](../modules/tfutils.html#tensorpack.tfutils.summary.add_moving_summary)
@@ -65,6 +68,24 @@ As long as the type of data is supported, the data will be dispatched to and log
 As a result, tensorboard will show not only summaries in the graph, but also your custom data.
 For example, a precise validation error often needs to be computed manually, outside the TensorFlow graph.
 With a uniform monitor backend, this number will show up in tensorboard as well.
+
+### Remote Logging
+
+It is also easy to send data to online logging services
+for experiment management and reproducibility.
+
+For example, to send logging data to [comet.ml](https://www.comet.ml/), you can use
+[CometMLMonitor](../modules/callbacks.html#tensorpack.callbacks.CometMLMonitor).
+
+To send logging data to [WandB](https://www.wandb.com/),
+it's even simpler -- you only need to do:
+```python
+import wandb; wandb.init(..., sync_tensorboard=True)
+```
+
+Refer to their documentation for more types of logging you can do by using
+their APIs directly: [comet.ml](https://www.comet.ml/docs/python-sdk/Experiment/),
+[WandB](https://docs.wandb.com/docs/init.html).
 
 ### Textual Logs
 

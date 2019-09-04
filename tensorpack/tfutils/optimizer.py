@@ -145,9 +145,6 @@ class AccumGradOptimizer(ProxyOptimizer):
     This is roughly the same as using a :math:`k` times larger batch size plus a
     :math:`k` times larger learning rate, but uses much less memory.
 
-    Note that this implementation may not support all models.
-    E.g., it currently doesn't support sparse gradient update.
-
     This optimizer can be used in any TensorFlow code (with or without tensorpack).
 
     Example:
@@ -183,18 +180,16 @@ class AccumGradOptimizer(ProxyOptimizer):
         grads_and_vars = FilterNoneGrad().process(grads_and_vars)
         vs = []
         for g, v in grads_and_vars:
-            assert isinstance(g, tf.Tensor) and isinstance(v, tf.Variable), \
-                "AccumGradOptimizer only works for dense update! " \
-                "Types of v and g are {} and {}".format(type(v), type(g))
+            assert isinstance(g, (tf.Tensor, tf.IndexedSlices)) and isinstance(v, tf.Variable), \
+                "AccumGradOptimizer does not work for the gradient of {}! " \
+                "Types of v and g are {} and {}".format(v.op.name, type(v), type(g))
             vs.append(v)
 
         with tf.control_dependencies(None):
             slots = self._create_accum_slots(vs)
             slots_and_vars = [(s, gv[1]) for s, gv in zip(slots, grads_and_vars)]
 
-            # Create the counter on the same device as the first variable.
-            with tf.variable_scope(self._name), \
-                    vs[0].graph.colocate_with(vs[0]):
+            with tf.variable_scope(self._name), tf.device('/cpu:0'):
                 counter = tf.Variable(
                     0, name="counter", trainable=False, dtype=tf.int32)
 
