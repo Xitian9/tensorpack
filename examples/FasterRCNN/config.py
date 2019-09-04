@@ -83,7 +83,7 @@ _C.MODE_MASK = False       # FasterRCNN or MaskRCNN
 _C.MODE_FPN = False
 
 # dataset -----------------------
-_C.DATA.BASEDIR = os.path.abspath('/home/stephen/projects/plygrad/Datasets/syntheticDataWood1')
+_C.DATA.BASEDIR = os.path.abspath('/home/plygradlinux/Datasets/syntheticWood1')
 # All TRAIN dataset will be concatenated for training.
 _C.DATA.TRAIN = ('wood_train', )   # i.e. trainval35k, AKA train2017
 # Each VAL dataset will be evaluated separately (instead of concatenated)
@@ -97,7 +97,7 @@ _C.DATA.ABSOLUTE_COORD = True
 # Number of data loading workers.
 # In case of horovod training, this is the number of workers per-GPU (so you may want to use a smaller number).
 # Set to 0 to disable parallel data loading
-_C.DATA.NUM_WORKERS = 10
+_C.DATA.NUM_WORKERS = 0
 
 # backbone ----------------------
 _C.BACKBONE.WEIGHTS = ''
@@ -138,7 +138,7 @@ _C.TRAIN.STARTING_EPOCH = 1  # the first epoch to start with, useful to continue
 # Therefore, there is *no need* to modify the config if you only change the number of GPUs.
 
 _C.TRAIN.LR_SCHEDULE = "1x"      # "1x" schedule in detectron
-_C.TRAIN.EVAL_PERIOD = 50  # period (epochs) to run evaluation
+_C.TRAIN.EVAL_PERIOD = 2000  # period (epochs) to run evaluation
 _C.TRAIN.CHECKPOINT_PERIOD = 20  # period (epochs) to save model
 
 # preprocessing --------------------
@@ -160,7 +160,7 @@ _C.RPN.NEGATIVE_ANCHOR_THRESH = 0.3
 
 # rpn training -------------------------
 _C.RPN.FG_RATIO = 0.5  # fg ratio among selected RPN anchors
-_C.RPN.BATCH_PER_IM = 256  # total (across FPN levels) number of anchors that are marked valid
+_C.RPN.BATCH_PER_IM = 128  # total (across FPN levels) number of anchors that are marked valid
 _C.RPN.MIN_SIZE = 0
 _C.RPN.PROPOSAL_NMS_THRESH = 0.7
 # Anchors which overlap with a crowd box (IOA larger than threshold) will be ignored.
@@ -181,7 +181,7 @@ _C.RPN.TRAIN_PER_LEVEL_NMS_TOPK = 2000
 _C.RPN.TEST_PER_LEVEL_NMS_TOPK = 1000
 
 # fastrcnn training ---------------------
-_C.FRCNN.BATCH_PER_IM = 512
+_C.FRCNN.BATCH_PER_IM = 128
 _C.FRCNN.BBOX_REG_WEIGHTS = [10., 10., 5., 5.]  # Slightly better setting: 20, 20, 10, 10
 _C.FRCNN.FG_THRESH = 0.5
 _C.FRCNN.FG_RATIO = 0.25  # fg ratio in a ROI batch
