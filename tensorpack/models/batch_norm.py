@@ -11,10 +11,11 @@ from ..tfutils.collection import backup_collection, restore_collection
 from ..tfutils.common import get_tf_version_tuple
 from ..tfutils.tower import get_current_tower_context
 from ..utils import logger
-from ..utils.argtools import get_data_format
+from ..utils.argtools import get_data_format, log_once
 from ..utils.develop import log_deprecated
 from .common import VariableHolder, layer_register
 from .tflayer import convert_to_tflayer_args, rename_get_variable
+from .utils import disable_autograph
 
 __all__ = ['BatchNorm', 'BatchRenorm']
 
@@ -58,15 +59,6 @@ def internal_update_bn_ema(xn, batch_mean, batch_var,
     # will hang when some BatchNorm layers are unused (https://github.com/tensorpack/tensorpack/issues/1078)
     with tf.control_dependencies([update_op1, update_op2]):
         return tf.identity(xn, name='output')
-
-
-try:
-    # When BN is used as an activation, keras layers try to autograph.convert it
-    # This leads to massive warnings so we disable it.
-    from tensorflow.python.autograph.impl.api import do_not_convert as disable_autograph
-except ImportError:
-    def disable_autograph():
-        return lambda x: x
 
 
 @layer_register()
@@ -224,7 +216,7 @@ def BatchNorm(inputs, axis=None, training=None, momentum=0.9, epsilon=1e-5,
         assert TF_version >= (1, 4), \
             "Fine tuning a BatchNorm model with fixed statistics needs TF>=1.4!"
         if ctx.is_main_training_tower:  # only warn in first tower
-            logger.warn("[BatchNorm] Using moving_mean/moving_variance in training.")
+            log_once("Some BatchNorm layer uses moving_mean/moving_variance in training.", func='warn')
         # Using moving_mean/moving_variance in training, which means we
         # loaded a pre-trained BN and only fine-tuning the affine part.
 
@@ -330,7 +322,7 @@ def BatchNorm(inputs, axis=None, training=None, momentum=0.9, epsilon=1e-5,
                 logger.warn("BatchNorm(sync_statistics='horovod') is used with only one process!")
             else:
                 import horovod
-                hvd_version = tuple(map(int, horovod.__version__.split('.')))
+                hvd_version = tuple(map(int, horovod.__version__.split('.')[:3]))
                 assert hvd_version >= (0, 13, 6), "sync_statistics=horovod needs horovod>=0.13.6 !"
 
                 batch_mean = hvd.allreduce(batch_mean, average=True)

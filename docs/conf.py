@@ -376,6 +376,8 @@ _DEPRECATED_NAMES = set([
     'DistributedTrainerParameterServer',
     'InputDesc',
     'inputs_desc',
+    'Augmentor',
+    "get_model_loader",
 
     # renamed items that should not appear in docs
     'DumpTensor',
@@ -383,6 +385,7 @@ _DEPRECATED_NAMES = set([
     'get_nr_gpu',
     'TrainingMonitor',
     'PeakMemoryTracker',
+    'TowerFuncWrapper',
 
     'PrefetchData',
     'MultiProcessPrefetchData',
@@ -390,17 +393,17 @@ _DEPRECATED_NAMES = set([
     'MultiThreadPrefetchData',
 
     # deprecated or renamed symbolic code
-    'Deconv2D', 'psnr',
+    'Deconv2D',
 
     # shouldn't appear in doc:
     'l2_regularizer', 'l1_regularizer',
 
     # internal only
+    'execute_only_once',
+    'humanize_time_delta',
     'SessionUpdate',
-    'average_grads',
-    'aggregate_grads',
-    'allreduce_grads',
-    'get_checkpoint_path'
+    'get_checkpoint_path',
+    'IterSpeedCounter'
 ])
 
 def autodoc_skip_member(app, what, name, obj, skip, options):
@@ -415,6 +418,7 @@ def autodoc_skip_member(app, what, name, obj, skip, options):
     # Hide some names that are deprecated or not intended to be used
     if name in _DEPRECATED_NAMES:
         return True
+
     if name in ['__iter__', '__len__', 'reset_state', 'get_data', 'size']:
         # skip these methods with empty docstring
         if not obj.__doc__ and inspect.isfunction(obj):

@@ -3,15 +3,15 @@
 
 There are many other data loading solutions for deep learning.
 Here we explain why you may want to use Tensorpack DataFlow for your own good:
-it's easy, and fast (enough).
+**it's easy, and fast (enough)**.
 
 Note that this article may contain subjective opinions and we're happy to hear different voices.
 
 ### How Fast Do You Actually Need?
 
-Your data pipeline **only has to be fast enough**.
+Your data pipeline **only needs to be fast enough**.
 
-In practice, you should always make sure your data pipeline runs
+In practice, you should always first make sure your data pipeline runs
 asynchronously with your training.
 The method to do so is different in each training framework,
 and in tensorpack this is automatically done by the [InputSource](/tutorial/extend/input-source.html)
@@ -20,11 +20,11 @@ interface.
 Once you make sure the data pipeline runs async with your training,
 the data pipeline only needs to be as fast as the training.
 **Getting faster brings no gains** to overall throughput.
-It only has to be fast enough.
+It only needs to be fast enough.
 
 If you have used other data loading libraries, you may doubt
-how easy it is to make data pipeline fast enough, with pure Python.
-In fact, it is usually not hard with DataFlow.
+how easy it is to make data pipeline fast enough with pure Python.
+In fact, it is usually not hard with DataFlow, because it's carefully optimized.
 
 For example: if you train a ResNet-50 on ImageNet,
 DataFlow is fast enough for you unless you use
@@ -86,11 +86,10 @@ On the other hand, DataFlow is:
 
 1. **Easy**: Any Python function that produces data can be made a DataFlow and
    used for training. No need for intermediate format when you don't.
-1. **Flexible**: Since it is in pure Python, you still have the choice to use
-   a different data format when you need.
-   And we have provided tools to easily
-   [serialize a DataFlow](../../modules/dataflow.html#tensorpack.dataflow.LMDBSerializer)
-   to a single-file binary format when you need.
+1. **Flexible**: Since it is in pure Python, you can use any data format.
+   When you need, you can still easily serialize your dataflow to a single-file
+   format with 
+   [a few lines of code](../../modules/dataflow.html#tensorpack.dataflow.LMDBSerializer).
 
 
 ### Alternative Data Loading Solutions:
@@ -153,7 +152,7 @@ or when you need to filter your data on the fly.
 1. `torch.utils.data.DataLoader` assumes that:
    1. You do batch training
    1. You use a constant batch size
-   1. Indices are sufficient to determine the samples to batch together
+   1. Indices are sufficient to determine which samples to batch together
 
    None of these are necessarily true.
 
@@ -161,16 +160,16 @@ or when you need to filter your data on the fly.
    but inefficient for generic data type or numpy arrays.
    Also, its implementation [does not always clean up the subprocesses correctly](https://github.com/pytorch/pytorch/issues/16608).
 
-Pytorch starts to improve on these bad assumptions (e.g., with [IterableDataset](https://github.com/pytorch/pytorch/pull/19228)).
+PyTorch starts to improve on these bad assumptions (e.g., with [IterableDataset](https://github.com/pytorch/pytorch/pull/19228)).
 On the other hand, DataFlow:
 
-1. Is a pure iterator, not necessarily has a length or can be indexed. This is more generic.
+1. Is an iterator, not necessarily has a length or can be indexed. This is more generic.
 2. Does not assume batches, and allow you to implement different batching logic easily.
 3. Is optimized for generic data type and numpy arrays.
 
 
 ```eval_rst
-.. note:: Why is an iterator interface more generic than ``__getitem__``?
+.. note:: An iterator interface is more generic than ``__getitem__``?
 
 	DataFlow's iterator interface can perfectly simulate the behavior of indexing interface like this:
 

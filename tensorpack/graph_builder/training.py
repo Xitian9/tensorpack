@@ -15,13 +15,12 @@ from ..tfutils.common import get_tf_version_tuple
 from ..tfutils.gradproc import ScaleGradient
 from ..tfutils.tower import TrainTowerContext
 from ..utils import logger
+from ..utils.develop import HIDE_DOC
 from .utils import (
     GradientPacker, LeastLoadedDeviceSetter, aggregate_grads, allreduce_grads, allreduce_grads_hierarchical,
     merge_grad_list, override_to_local_variable, split_grad_list)
 
-__all__ = ['GraphBuilder',
-           'SyncMultiGPUParameterServerBuilder', 'DataParallelBuilder',
-           'SyncMultiGPUReplicatedBuilder', 'AsyncMultiGPUBuilder']
+__all__ = ["DataParallelBuilder"]
 
 
 @six.add_metaclass(ABCMeta)
@@ -118,6 +117,7 @@ class DataParallelBuilder(GraphBuilder):
         return ret
 
     @staticmethod
+    @HIDE_DOC
     def build_on_towers(*args, **kwargs):
         return DataParallelBuilder.call_for_each_tower(*args, **kwargs)
 
@@ -304,7 +304,7 @@ class SyncMultiGPUReplicatedBuilder(DataParallelBuilder):
             with tf.name_scope('sync_variables'):
                 post_init_op = SyncMultiGPUReplicatedBuilder.get_post_init_ops()
         else:
-            post_init_op = tf.no_op(name='empty_sync_variables')
+            post_init_op = None
         return train_op, post_init_op
 
 # Adopt from https://github.com/tensorflow/benchmarks/blob/master/scripts/tf_cnn_benchmarks/variable_mgr.py

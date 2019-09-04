@@ -79,18 +79,21 @@ _C = config     # short alias to avoid coding
 
 # mode flags ---------------------
 _C.TRAINER = 'replicated'  # options: 'horovod', 'replicated'
-_C.MODE_MASK = True        # FasterRCNN or MaskRCNN
-_C.MODE_FPN = False
+_C.MODE_MASK = True        # Faster R-CNN or Mask R-CNN
+_C.MODE_FPN = True
 
 # dataset -----------------------
 _C.DATA.BASEDIR = '/path/to/your/DATA/DIR'
+# All available dataset names are defined in `dataset/coco.py:register_coco`.
 # All TRAIN dataset will be concatenated for training.
-_C.DATA.TRAIN = ('coco_train2014', 'coco_valminusminival2014')   # i.e. trainval35k, AKA train2017
+_C.DATA.TRAIN = ('coco_train2017',)   # i.e. trainval35k
 # Each VAL dataset will be evaluated separately (instead of concatenated)
-_C.DATA.VAL = ('coco_minival2014', )  # AKA val2017
-# This two config will be populated later by the dataset loader:
-_C.DATA.NUM_CATEGORY = 80  # without the background class (e.g., 80 for COCO)
+_C.DATA.VAL = ('coco_val2017',)  # AKA minival2014
+
+# These two configs will be populated later inside `finalize_configs`.
+_C.DATA.NUM_CATEGORY = -1  # without the background class (e.g., 80 for COCO)
 _C.DATA.CLASS_NAMES = []  # NUM_CLASS (NUM_CATEGORY+1) strings, the first is "BG".
+
 # whether the coordinates in the annotations are absolute pixel values, or a relative value in [0, 1]
 _C.DATA.ABSOLUTE_COORD = True
 # Number of data loading workers.
@@ -99,12 +102,18 @@ _C.DATA.ABSOLUTE_COORD = True
 _C.DATA.NUM_WORKERS = 10
 
 # backbone ----------------------
-_C.BACKBONE.WEIGHTS = ''   # /path/to/weights.npz
+_C.BACKBONE.WEIGHTS = ''
+# To train from scratch, set it to empty, and set FREEZE_AT to 0
+# To train from ImageNet pre-trained models, use the one that matches your
+#   architecture from http://models.tensorpack.com under the 'FasterRCNN' section.
+# To train from an existing COCO model, use the path to that file, and change
+#   the other configurations according to that model.
+
 _C.BACKBONE.RESNET_NUM_BLOCKS = [3, 4, 6, 3]     # for resnet50
 # RESNET_NUM_BLOCKS = [3, 4, 23, 3]    # for resnet101
 _C.BACKBONE.FREEZE_AFFINE = False   # do not train affine parameters inside norm layers
 _C.BACKBONE.NORM = 'FreezeBN'  # options: FreezeBN, SyncBN, GN, None
-_C.BACKBONE.FREEZE_AT = 2  # options: 0, 1, 2
+_C.BACKBONE.FREEZE_AT = 2  # options: 0, 1, 2. How many stages in backbone to freeze (not training)
 
 # Use a base model with TF-preferred padding mode,
 # which may pad more pixels on right/bottom than top/left.
@@ -130,12 +139,9 @@ _C.TRAIN.STARTING_EPOCH = 1  # the first epoch to start with, useful to continue
 # the base learning rate are computed from BASE_LR and LR_SCHEDULE.
 # Therefore, there is *no need* to modify the config if you only change the number of GPUs.
 
-_C.TRAIN.LR_SCHEDULE = [120000, 160000, 180000]      # "1x" schedule in detectron
-# _C.TRAIN.LR_SCHEDULE = [240000, 320000, 360000]      # "2x" schedule in detectron
-# Longer schedules for from-scratch training (https://arxiv.org/abs/1811.08883):
-# _C.TRAIN.LR_SCHEDULE = [960000, 1040000, 1080000]    # "6x" schedule in detectron
-# _C.TRAIN.LR_SCHEDULE = [1500000, 1580000, 1620000]   # "9x" schedule in detectron
-_C.TRAIN.EVAL_PERIOD = 25  # period (epochs) to run evaluation
+_C.TRAIN.LR_SCHEDULE = "1x"      # "1x" schedule in detectron
+_C.TRAIN.EVAL_PERIOD = 50  # period (epochs) to run evaluation
+_C.TRAIN.CHECKPOINT_PERIOD = 20  # period (epochs) to save model
 
 # preprocessing --------------------
 # Alternative old (worse & faster) setting: 600
@@ -194,10 +200,11 @@ _C.FPN.FRCNN_CONV_HEAD_DIM = 256
 _C.FPN.FRCNN_FC_HEAD_DIM = 1024
 _C.FPN.MRCNN_HEAD_FUNC = 'maskrcnn_up4conv_head'   # choices: maskrcnn_up4conv_{,gn_}head
 
-# Mask-RCNN
+# Mask R-CNN
 _C.MRCNN.HEAD_DIM = 256
+_C.MRCNN.ACCURATE_PASTE = True  # slightly more aligned results, but very slow on numpy
 
-# Cascade-RCNN, only available in FPN mode
+# Cascade R-CNN, only available in FPN mode
 _C.FPN.CASCADE = False
 _C.CASCADE.IOUS = [0.5, 0.6, 0.7]
 _C.CASCADE.BBOX_REG_WEIGHTS = [[10., 10., 5., 5.], [20., 20., 10., 10.], [30., 30., 15., 15.]]
@@ -221,6 +228,14 @@ def finalize_configs(is_training):
     _C.freeze(False)  # populate new keys now
     if isinstance(_C.DATA.VAL, six.string_types):  # support single string (the typical case) as well
         _C.DATA.VAL = (_C.DATA.VAL, )
+    if isinstance(_C.DATA.TRAIN, six.string_types):  # support single string
+        _C.DATA.TRAIN = (_C.DATA.TRAIN, )
+
+    # finalize dataset definitions ...
+    from dataset import DatasetRegistry
+    datasets = list(_C.DATA.TRAIN) + list(_C.DATA.VAL)
+    _C.DATA.CLASS_NAMES = DatasetRegistry.get_metadata(datasets[0], "class_names")
+    _C.DATA.NUM_CATEGORY = len(_C.DATA.CLASS_NAMES) - 1
 
     assert _C.BACKBONE.NORM in ['FreezeBN', 'SyncBN', 'GN', 'None'], _C.BACKBONE.NORM
     if _C.BACKBONE.NORM != 'FreezeBN':
@@ -253,10 +268,24 @@ def finalize_configs(is_training):
         os.environ['TF_AUTOTUNE_THRESHOLD'] = '1'
         assert _C.TRAINER in ['horovod', 'replicated'], _C.TRAINER
 
+        lr = _C.TRAIN.LR_SCHEDULE
+        if isinstance(lr, six.string_types):
+            if lr.endswith("x"):
+                LR_SCHEDULE_KITER = {
+                    "{}x".format(k):
+                    [180 * k - 120, 180 * k - 40, 180 * k]
+                    for k in range(2, 10)}
+                LR_SCHEDULE_KITER["1x"] = [120, 160, 180]
+                _C.TRAIN.LR_SCHEDULE = [x * 1000 for x in LR_SCHEDULE_KITER[lr]]
+            else:
+                _C.TRAIN.LR_SCHEDULE = eval(lr)
+
         # setup NUM_GPUS
         if _C.TRAINER == 'horovod':
             import horovod.tensorflow as hvd
             ngpu = hvd.size()
+            logger.info("Horovod Rank={}, Size={}, LocalRank={}".format(
+                hvd.rank(), hvd.size(), hvd.local_rank()))
         else:
             assert 'OMPI_COMM_WORLD_SIZE' not in os.environ
             ngpu = get_num_gpu()
