@@ -52,11 +52,12 @@ if __name__ == '__main__':
     MODEL = ResNetFPNModel() if cfg.MODE_FPN else ResNetC4Model()
 
     if args.load:
-         session_init = get_model_loader(args.load)
+        session_init = get_model_loader(args.load)
     else:
-         session_init = get_model_loader(cfg.BACKBONE.WEIGHTS) if cfg.BACKBONE.WEIGHTS else None
+        session_init = get_model_loader(cfg.BACKBONE.WEIGHTS) if cfg.BACKBONE.WEIGHTS else None
 
-    print([m.values() for m in session_init.saver.graph.get_operations()])
+    with session_init as sess:
+        print([m.values() for m in graph.get_operations()])
 
     #if is_horovod and hvd.rank() > 0:
     #    session_init = None
