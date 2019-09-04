@@ -18,10 +18,6 @@ __all__ = ['register_wood']
 
 class WoodDetection(DatasetSplit):
 
-    # 80 names for COCO
-    class_names = ["hole_small", "hole_medium", "hole_large"]
-    cfg.DATA.CLASS_NAMES = ["BG"] + class_names
-
     def __init__(self, basedir, name):
         """
         Args:
@@ -82,12 +78,19 @@ class WoodDetection(DatasetSplit):
                 curBoxes.append([np.float32(row["x1"]), np.float32(row["y1"]),
                                  np.float32(row["x2"]), np.float32(row["y2"])])
                 if row["class"] == "1":
-                    if row["area"] < 100:
+                    if row["area"] < 200:
                         curClasses.append(1)
-                    elif row["area"] < 400:
+                    elif row["area"] < 350:
                         curClasses.append(2)
                     else:
                         curClasses.append(3)
+                elif row["class"] == "2":
+                    if row["area"] < 22:
+                        curClasses.append(4)
+                    elif row["area"] < 30:
+                        curClasses.append(5)
+                    else:
+                        curClasses.append(6)
 
                 appendRoidb(image)
 
@@ -113,7 +116,9 @@ class WoodDetection(DatasetSplit):
             json.dump(results, f)
         if len(results):
             # sometimes may crash if the results are empty?
-            return results
+            #return results
+            # Not working at the moment: need to set up proper data summaries
+            return {}
         else:
             return {}
 
@@ -123,5 +128,12 @@ def register_wood(basedir):
     Add COCO datasets like "coco_train201x" to the registry,
     so you can refer to them with names in `cfg.DATA.TRAIN/VAL`.
     """
+    class_names = ["small_hole", "medium_hole", "large_hole",
+                   "small_branch", "medium_branch", "large_branch"]
+    class_names = ["BG"] + class_names
+
+
     for split in ["train", "val"]:
-        DatasetRegistry.register("wood_" + split, lambda x=split: WoodDetection(basedir, x))
+        name = "wood_" + split
+        DatasetRegistry.register(name, lambda x=split: WoodDetection(basedir, x))
+        DatasetRegistry.register_metadata(name, 'class_names', class_names)
