@@ -75,24 +75,28 @@ class WoodDetection(DatasetSplit):
                     curBoxes = []
                     curClasses = []
 
-                curBoxes.append([np.float32(row["x1"]), np.float32(row["y1"]),
-                                 np.float32(row["x2"]), np.float32(row["y2"])])
-                if row["class"] == 1:
-                    if row["area"] < 200:
-                        curClasses.append(1)
-                    elif row["area"] < 350:
-                        curClasses.append(2)
-                    else:
-                        curClasses.append(3)
-                elif row["class"] == 2:
-                    if row["area"] < 22:
-                        curClasses.append(4)
-                    elif row["area"] < 30:
-                        curClasses.append(5)
-                    else:
-                        curClasses.append(6)
+                x1 = np.float32(row["x1"])
+                y1 = np.float32(row["y1"])
+                x2 = np.float32(row["x2"])
+                y2 = np.float32(row["y2"])
 
-                appendRoidb(image)
+                if x1 != x2 and y1 != y2:
+                    curBoxes.append([x1, y1, x2, y2])
+                    if row["class"] == 1:
+                        if row["area"] < 200:
+                            curClasses.append(1)
+                        elif row["area"] < 350:
+                            curClasses.append(2)
+                        else:
+                            curClasses.append(3)
+                    elif row["class"] == 2:
+                        if row["area"] < 22:
+                            curClasses.append(4)
+                        elif row["area"] < 30:
+                            curClasses.append(5)
+                        else:
+                            curClasses.append(6)
+                    appendRoidb(image)
 
         return roidbs
 
