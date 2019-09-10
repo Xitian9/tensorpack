@@ -106,10 +106,10 @@ class ShapesDetection(DatasetSplit):
     def inference_roidbs(self):
         return self.load(add_gt=False)
 
-    def eval_inference_results(self, results, output):
-        assert output is not None, "evaluation requires an output file!"
-        with open(output, 'w') as f:
-            json.dump(results, f)
+    def eval_inference_results(self, results, output=None):
+        if output is not None:
+            with open(output, 'w') as f:
+                json.dump(results, f)
         if len(results):
             # sometimes may crash if the results are empty?
             return results
