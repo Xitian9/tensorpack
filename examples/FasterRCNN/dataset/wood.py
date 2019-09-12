@@ -65,7 +65,7 @@ class WoodDetection(DatasetSplit):
         with timed_operation('Load Groundtruth Boxes for {}'.format(self.name)):
 
             df = pd.read_csv(self.annotation_file,
-                             names=["filename", "x1", "y1", "x2", "y2", "class", "area"])
+                             names=["filename", "x", "y", "width", "height", "class", "area"])
 
             for index, row in df.iterrows():
                 fn = row["filename"]
@@ -75,28 +75,27 @@ class WoodDetection(DatasetSplit):
                     curBoxes = []
                     curClasses = []
 
-                x1 = np.float32(row["x1"])
-                y1 = np.float32(row["y1"])
-                x2 = np.float32(row["x2"])
-                y2 = np.float32(row["y2"])
+                x = np.float32(row["x"])
+                y = np.float32(row["y"])
+                width = np.float32(row["width"])
+                height = np.float32(row["height"])
 
-                if x1 != x2 and y1 != y2:
-                    curBoxes.append([x1, y1, x2, y2])
-                    if row["class"] == 1:
-                        if row["area"] < 200:
-                            curClasses.append(1)
-                        elif row["area"] < 350:
-                            curClasses.append(2)
-                        else:
-                            curClasses.append(3)
-                    elif row["class"] == 2:
-                        if row["area"] < 22:
-                            curClasses.append(4)
-                        elif row["area"] < 30:
-                            curClasses.append(5)
-                        else:
-                            curClasses.append(6)
-                    appendRoidb(image)
+                curBoxes.append([x - width/2, y - height/2, x + width/2, y + height/2])
+                if row["class"] == 1:
+                    if row["area"] < 200:
+                        curClasses.append(1)
+                    elif row["area"] < 350:
+                        curClasses.append(2)
+                    else:
+                        curClasses.append(3)
+                elif row["class"] == 2:
+                    if row["area"] < 22:
+                        curClasses.append(4)
+                    elif row["area"] < 30:
+                        curClasses.append(5)
+                    else:
+                        curClasses.append(6)
+                appendRoidb(image)
 
         return roidbs
 
