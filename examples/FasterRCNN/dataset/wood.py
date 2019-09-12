@@ -75,14 +75,14 @@ class WoodDetection(DatasetSplit):
                     curBoxes = []
                     curClasses = []
 
-                xc = row["x"]
-                yc = row["y"]
+                x1 = row["x"]
+                y1 = row["y"]
                 width = row["width"]
                 height =row["height"]
-                x1 = np.float32(xc - width / 2)
-                x2 = np.float32(xc + width / 2)
-                y1 = np.float32(yc - height / 2)
-                y2 = np.float32(yc + height / 2)
+                #x1 = np.float32(xc - width / 2)
+                x2 = np.float32(x1 + width)
+                #y1 = np.float32(yc - height / 2)
+                y2 = np.float32(y1 + height)
 
                 curBoxes.append([x1,y1,x2,y2])
                 if row["class"] == 1:
@@ -95,7 +95,7 @@ class WoodDetection(DatasetSplit):
                 elif row["class"] == 2:
                     if row["area"] < 22:
                         curClasses.append(4)
-                    elif row["area"] < 30:
+                    elif row["area"] < 35:
                         curClasses.append(5)
                     else:
                         curClasses.append(6)
