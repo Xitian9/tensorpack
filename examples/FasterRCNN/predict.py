@@ -106,7 +106,7 @@ def do_predict(pred_func, input_file):
     viz = np.concatenate((img, final), axis=1)
     cv2.imwrite("output.png", viz)
     logger.info("Inference output for {} written to output.png".format(input_file))
-    tpviz.interactive_imshow(viz)
+    # tpviz.interactive_imshow(viz)
 
 
 if __name__ == '__main__':
