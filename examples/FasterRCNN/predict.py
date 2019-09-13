@@ -104,9 +104,10 @@ def do_predict(pred_func, input_file):
     else:
         final = draw_final_outputs(img, results)
     viz = np.concatenate((img, final), axis=1)
-    outfile, ext = os.path.splitext(os.path.basename(input_file))
-    cv2.imwrite(outfile + "-predict" + ext, viz)
-    logger.info("Inference output for {} written to output.png".format(input_file))
+    tail, ext = os.path.splitext(os.path.basename(input_file))
+    output_file = tail + "-predict" + ext
+    cv2.imwrite(output_file, viz)
+    logger.info("Inference output for {} written to {}".format(input_file, output_file))
     # tpviz.interactive_imshow(viz)
 
 
