@@ -120,13 +120,13 @@ def predict_image(img, model_func):
         [DetectionResult]
     """
     orig_shape = img.shape[:2]
-    resizer = CustomResize(cfg.PREPROC.TEST_SHORT_EDGE_SIZE, cfg.PREPROC.MAX_SIZE)
-    resized_img = resizer.augment(img)
-    scale = np.sqrt(resized_img.shape[0] * 1.0 / img.shape[0] * resized_img.shape[1] / img.shape[1])
+    #resizer = CustomResize(cfg.PREPROC.TEST_SHORT_EDGE_SIZE, cfg.PREPROC.MAX_SIZE)
+    #resized_img = resizer.augment(img)
+    #scale = np.sqrt(resized_img.shape[0] * 1.0 / img.shape[0] * resized_img.shape[1] / img.shape[1])
     boxes, probs, labels, *masks = model_func(resized_img)
 
     # Some slow numpy postprocessing:
-    boxes = boxes / scale
+    #boxes = boxes / scale
     # boxes are already clipped inside the graph, but after the floating point scaling, this may not be true any more.
     boxes = clip_boxes(boxes, orig_shape)
     if masks:
