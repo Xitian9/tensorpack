@@ -80,7 +80,7 @@ _C = config     # short alias to avoid coding
 # mode flags ---------------------
 _C.TRAINER = 'replicated'  # options: 'horovod', 'replicated', 'cpu'
 _C.MODE_MASK = False       # FasterRCNN or MaskRCNN
-_C.MODE_FPN = False
+_C.MODE_FPN = True
 
 # dataset -----------------------
 _C.DATA.BASEDIR = os.path.abspath('/home/plygradlinux/Datasets/syntheticWood1')
@@ -100,7 +100,7 @@ _C.DATA.ABSOLUTE_COORD = True
 _C.DATA.NUM_WORKERS = 0
 
 # backbone ----------------------
-_C.BACKBONE.WEIGHTS = ''
+_C.BACKBONE.WEIGHTS = 'ImageNet-R50-AlignPadding.npz'
 # To train from scratch, set it to empty, and set FREEZE_AT to 0
 # To train from ImageNet pre-trained models, use the one that matches your
 #   architecture from http://models.tensorpack.com under the 'FasterRCNN' section.
@@ -111,7 +111,7 @@ _C.BACKBONE.RESNET_NUM_BLOCKS = [3, 4, 6, 3]     # for resnet50
 # RESNET_NUM_BLOCKS = [3, 4, 23, 3]    # for resnet101
 _C.BACKBONE.FREEZE_AFFINE = False   # do not train affine parameters inside norm layers
 _C.BACKBONE.NORM = 'FreezeBN'  # options: FreezeBN, SyncBN, GN, None
-_C.BACKBONE.FREEZE_AT = 0  # options: 0, 1, 2. How many stages in backbone to freeze (not training)
+_C.BACKBONE.FREEZE_AT = 2  # options: 0, 1, 2. How many stages in backbone to freeze (not training)
 
 # Use a base model with TF-preferred padding mode,
 # which may pad more pixels on right/bottom than top/left.
@@ -138,7 +138,7 @@ _C.TRAIN.STARTING_EPOCH = 1  # the first epoch to start with, useful to continue
 # Therefore, there is *no need* to modify the config if you only change the number of GPUs.
 
 _C.TRAIN.LR_SCHEDULE = "1x"      # "1x" schedule in detectron
-_C.TRAIN.EVAL_PERIOD = 1000  # period (epochs) to run evaluation
+_C.TRAIN.EVAL_PERIOD = 200  # period (epochs) to run evaluation
 _C.TRAIN.CHECKPOINT_PERIOD = 20  # period (epochs) to save model
 
 # preprocessing --------------------
