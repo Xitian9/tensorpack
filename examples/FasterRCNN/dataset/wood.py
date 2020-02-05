@@ -85,20 +85,7 @@ class WoodDetection(DatasetSplit):
                 y2 = np.float32(y1 + height)
 
                 curBoxes.append([x1,y1,x2,y2])
-                if row["class"] == 1:
-                    if row["area"] < 200:
-                        curClasses.append(1)
-                    elif row["area"] < 350:
-                        curClasses.append(2)
-                    else:
-                        curClasses.append(3)
-                elif row["class"] == 2:
-                    if row["area"] < 22:
-                        curClasses.append(4)
-                    elif row["area"] < 35:
-                        curClasses.append(5)
-                    else:
-                        curClasses.append(6)
+                curClasses.append(row["class"])
                 appendRoidb(image)
 
         return roidbs
@@ -135,10 +122,8 @@ def register_wood(basedir):
     Add COCO datasets like "coco_train201x" to the registry,
     so you can refer to them with names in `cfg.DATA.TRAIN/VAL`.
     """
-    class_names = ["small_hole", "medium_hole", "large_hole",
-                   "small_branch", "medium_branch", "large_branch"]
+    class_names = ["hole", "branch"]
     class_names = ["BG"] + class_names
-
 
     for split in ["train", "val"]:
         name = "wood_" + split
