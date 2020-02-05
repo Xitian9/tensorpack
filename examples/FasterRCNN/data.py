@@ -70,17 +70,18 @@ class TrainingDataPreprocessor:
     """
 
     def __init__(self, cfg):
-        self.cfg = cfg
-        min_size = cfg.PREPROC.TRAIN_SHORT_EDGE_SIZE[0]
-        max_size = cfg.PREPROC.TRAIN_SHORT_EDGE_SIZE[1]
+        self.cfg  = cfg
+        min_size  = cfg.PREPROC.TRAIN_SHORT_EDGE_SIZE[0]
+        max_size  = cfg.PREPROC.TRAIN_SHORT_EDGE_SIZE[1]
+        full_size = cfg.PREPROC.MAX_SIZE
 
         self.aug = imgaug.AugmentorList([
+            imgaug.Flip(horiz=True),
+            imgaug.Flip(vert=True),
             #CustomResize(cfg.PREPROC.TRAIN_SHORT_EDGE_SIZE, cfg.PREPROC.MAX_SIZE),
             # TODO should I randomly crop the image to speed up training?
             #imgaug.RandomCrop((800, 800)),
-            imgaug.RandomCropRandomShape(min_size, min_size, max_size, max_size),
-            imgaug.Flip(horiz=True),
-            imgaug.Flip(vert=True)
+            imgaug.RandomCropRandomShape(full_size, min_size, None, max_size)
         ])
 
     def __call__(self, roidb):
