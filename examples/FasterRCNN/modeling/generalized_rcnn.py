@@ -96,7 +96,7 @@ class GeneralizedRCNN(ModelDesc):
 class ResNetC4Model(GeneralizedRCNN):
     def inputs(self):
         ret = [
-            tf.TensorSpec((None, None, 3), tf.float32, 'image'),
+            tf.TensorSpec((None, None, 3), tf.uint8, 'image'),
             tf.TensorSpec((None, None, cfg.RPN.NUM_ANCHOR), tf.int32, 'anchor_labels'),
             tf.TensorSpec((None, None, cfg.RPN.NUM_ANCHOR, 4), tf.float32, 'anchor_boxes'),
             tf.TensorSpec((None, 4), tf.float32, 'gt_boxes'),
@@ -201,7 +201,7 @@ class ResNetFPNModel(GeneralizedRCNN):
 
     def inputs(self):
         ret = [
-            tf.TensorSpec((None, None, 3), tf.float32, 'image')]
+            tf.TensorSpec((None, None, 3), tf.uint8, 'image')]
         num_anchors = len(cfg.RPN.ANCHOR_RATIOS)
         for k in range(len(cfg.FPN.ANCHOR_STRIDES)):
             ret.extend([
