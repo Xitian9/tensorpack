@@ -175,7 +175,7 @@ def fastrcnn_losses(labels, label_logits, fg_boxes, fg_box_logits):
 
 
 @under_name_scope()
-def fastrcnn_predictions(boxes, scores):
+def fastrcnn_predictions(boxes, scores, export=False):
     """
     Generate final results from predictions of all proposals.
 
@@ -199,14 +199,19 @@ def fastrcnn_predictions(boxes, scores):
     cls_per_box = tf.slice(filtered_ids, [0, 0], [-1, 1])
     offsets = tf.cast(cls_per_box, tf.float32) * (max_coord + 1)  # F,1
     nms_boxes = filtered_boxes + offsets
-    selection = tf.image.non_max_suppression(
-        nms_boxes,
-        filtered_scores,
-        cfg.TEST.RESULTS_PER_IM,
-        cfg.TEST.FRCNN_NMS_THRESH)
-    final_scores = tf.gather(filtered_scores, selection, name='scores')
-    final_labels = tf.add(tf.gather(cls_per_box[:, 0], selection), 1, name='labels')
-    final_boxes = tf.gather(filtered_boxes, selection, name='boxes')
+    if export:
+        final_scores = tf.identity(filtered_scores, name='scores')
+        final_labels = tf.add(cls_per_box[:, 0], 1, name='labels')
+        final_boxes = tf.identity(filtered_boxes, name='boxes')
+    else:
+        selection = tf.image.non_max_suppression(
+            nms_boxes,
+            filtered_scores,
+            cfg.TEST.RESULTS_PER_IM,
+            cfg.TEST.FRCNN_NMS_THRESH)
+        final_scores = tf.gather(filtered_scores, selection, name='scores')
+        final_labels = tf.add(tf.gather(cls_per_box[:, 0], selection), 1, name='labels')
+        final_boxes = tf.gather(filtered_boxes, selection, name='boxes')
     return final_boxes, final_scores, final_labels
 
 

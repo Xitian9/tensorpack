@@ -130,7 +130,8 @@ if __name__ == '__main__':
         cfg.update_args(args.config)
     register_wood(cfg.DATA.BASEDIR)
 
-    MODEL = ResNetFPNModel() if cfg.MODE_FPN else ResNetC4Model()
+    export = args.compact or args.serving
+    MODEL = ResNetFPNModel(export=export) if cfg.MODE_FPN else ResNetC4Model(export)
 
     if not tf.test.is_gpu_available():
         from tensorflow.python.framework import test_util
@@ -152,7 +153,7 @@ if __name__ == '__main__':
             output_names=MODEL.get_inference_tensor_names()[1])
 
         if args.compact:
-            ModelExporter(predcfg).export_compact(args.compact, optimize=False)
+            ModelExporter(predcfg).export_compact(args.compact, optimize=True)
         elif args.serving:
             ModelExporter(predcfg).export_serving(args.serving, optimize=False)
 

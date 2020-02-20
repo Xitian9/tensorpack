@@ -25,6 +25,9 @@ from .model_rpn import generate_rpn_proposals, rpn_head, rpn_losses
 
 
 class GeneralizedRCNN(ModelDesc):
+    def __init__(self, export=False):
+        self.export = export
+
     def preprocess(self, image):
         image = tf.expand_dims(image, 0)
         image = image_preprocess(image, bgr=True)
@@ -96,7 +99,7 @@ class GeneralizedRCNN(ModelDesc):
 class ResNetC4Model(GeneralizedRCNN):
     def inputs(self):
         ret = [
-            tf.TensorSpec((None, None, 3), tf.uint8, 'image'),
+            tf.TensorSpec((None, None, 3), tf.uint8 if self.export else tf.float32, 'image'),
             tf.TensorSpec((None, None, cfg.RPN.NUM_ANCHOR), tf.int32, 'anchor_labels'),
             tf.TensorSpec((None, None, cfg.RPN.NUM_ANCHOR, 4), tf.float32, 'anchor_boxes'),
             tf.TensorSpec((None, 4), tf.float32, 'gt_boxes'),
@@ -184,7 +187,7 @@ class ResNetC4Model(GeneralizedRCNN):
             decoded_boxes = clip_boxes(decoded_boxes, image_shape2d, name='fastrcnn_all_boxes')
             label_scores = fastrcnn_head.output_scores(name='fastrcnn_all_scores')
             final_boxes, final_scores, final_labels = fastrcnn_predictions(
-                decoded_boxes, label_scores, name_scope='output')
+                decoded_boxes, label_scores, export=self.export, name_scope='output')
 
             if cfg.MODE_MASK:
                 roi_resized = roi_align(featuremap, final_boxes * (1.0 / cfg.RPN.ANCHOR_STRIDE), 14)
@@ -201,7 +204,7 @@ class ResNetFPNModel(GeneralizedRCNN):
 
     def inputs(self):
         ret = [
-            tf.TensorSpec((None, None, 3), tf.uint8, 'image')]
+            tf.TensorSpec((None, None, 3), tf.uint8 if self.export else tf.float32, 'image')]
         num_anchors = len(cfg.RPN.ANCHOR_RATIOS)
         for k in range(len(cfg.FPN.ANCHOR_STRIDES)):
             ret.extend([
@@ -313,7 +316,7 @@ class ResNetFPNModel(GeneralizedRCNN):
             decoded_boxes = clip_boxes(decoded_boxes, image_shape2d, name='fastrcnn_all_boxes')
             label_scores = fastrcnn_head.output_scores(name='fastrcnn_all_scores')
             final_boxes, final_scores, final_labels = fastrcnn_predictions(
-                decoded_boxes, label_scores, name_scope='output')
+                decoded_boxes, label_scores, export=self.export, name_scope='output')
             if cfg.MODE_MASK:
                 # Cascade inference needs roi transform with refined boxes.
                 roi_feature_maskrcnn = multilevel_roi_align(features[:4], final_boxes, 14)
