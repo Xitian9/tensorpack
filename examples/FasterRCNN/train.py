@@ -12,9 +12,10 @@ from tensorpack.callbacks.prof import *
 from tensorpack.tfutils import collect_env_info
 from tensorpack.tfutils.common import get_tf_version_tuple
 
-from dataset import register_coco, register_balloon, register_wood
-from config import config as cfg
+from dataset import register_veneer
+from config import config as base_config
 from config import finalize_configs
+import copy
 from data import get_train_dataflow
 from eval import EvalCallback
 from modeling.generalized_rcnn import ResNetC4Model, ResNetFPNModel
@@ -26,38 +27,23 @@ except ImportError:
     pass
 
 
-if __name__ == '__main__':
-    # "spawn/forkserver" is safer than the default "fork" method and
-    # produce more deterministic behavior & memory saving
-    # However its limitation is you cannot pass a lambda function to subprocesses.
-    import multiprocessing as mp
-    mp.set_start_method('spawn')
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--load', help='load a model to start training from. Can overwrite BACKBONE.WEIGHTS')
-    parser.add_argument('--logdir', help='log directory', default='train_log/maskrcnn')
-    parser.add_argument('--config', help="A list of KEY=VALUE to overwrite those defined in config.py", nargs='+')
+def run_training(cfg, logdir, load=None):
 
-    if get_tf_version_tuple() < (1, 6):
-        # https://github.com/tensorflow/tensorflow/issues/14657
-        logger.warn("TF<1.6 has a bug which may lead to crash in FasterRCNN if you're unlucky.")
-
-    args = parser.parse_args()
-    if args.config:
-        cfg.update_args(args.config)
-    register_wood(cfg.DATA.BASEDIR)  # add datasets to the registry
+    for gt in cfg.DATA.GROUNDTRUTHS:
+        register_veneer(cfg.DATA.BASEDIR, gt)  # add datasets to the registry
 
     # Setup logging ...
     is_horovod = cfg.TRAINER == 'horovod'
     if is_horovod:
         hvd.init()
     if not is_horovod or hvd.rank() == 0:
-        logger.set_logger_dir(args.logdir, 'd')
+        logger.set_logger_dir(logdir, 'd')
     logger.info("Environment Information:\n" + collect_env_info())
 
-    finalize_configs(is_training=True)
+    finalize_configs(cfg, is_training=True)
 
     # Create model
-    MODEL = ResNetFPNModel() if cfg.MODE_FPN else ResNetC4Model()
+    MODEL = ResNetFPNModel() if base_config.MODE_FPN else ResNetC4Model()
 
     # Compute the training schedule from the number of GPUs ...
     stepnum = cfg.TRAIN.STEPS_PER_EPOCH
@@ -133,3 +119,17 @@ if __name__ == '__main__':
     else:
         trainer = QueueInputTrainer()
     launch_train_with_config(traincfg, trainer)
+
+if __name__ == '__main__':
+    # "spawn/forkserver" is safer than the default "fork" method and
+    # produce more deterministic behavior & memory saving
+    # However its limitation is you cannot pass a lambda function to subprocesses.
+    import multiprocessing as mp
+    mp.set_start_method('spawn')
+    parser = argparse.ArgumentParser()
+
+    if get_tf_version_tuple() < (1, 6):
+        # https://github.com/tensorflow/tensorflow/issues/14657
+        logger.warn("TF<1.6 has a bug which may lead to crash in FasterRCNN if you're unlucky.")
+
+    

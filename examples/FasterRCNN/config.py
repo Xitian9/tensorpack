@@ -83,11 +83,12 @@ _C.MODE_MASK = False       # FasterRCNN or MaskRCNN
 _C.MODE_FPN = True
 
 # dataset -----------------------
-_C.DATA.BASEDIR = os.path.abspath('/home/plygradlinux/Datasets/syntheticWood1')
+_C.DATA.BASEDIR = os.path.abspath('/home/plygradlinux/Datasets')
+_C.DATA.GROUNDTRUTHS = ['dataset16032020.csv']
 # All TRAIN dataset will be concatenated for training.
-_C.DATA.TRAIN = ('wood_train', )   # i.e. trainval35k, AKA train2017
+_C.DATA.TRAIN = ('veneer_train', )   # i.e. trainval35k, AKA train2017
 # Each VAL dataset will be evaluated separately (instead of concatenated)
-_C.DATA.VAL = ('wood_val', )  # AKA val2017
+_C.DATA.VAL = ('veneer_val', )  # AKA val2017
 # This two config will be populated later by the dataset loader:
 _C.DATA.NUM_CATEGORY = -1  # without the background class (e.g., 80 for COCO)
 _C.DATA.CLASS_NAMES = []  # NUM_CLASS (NUM_CATEGORY+1) strings, the first is "BG".
