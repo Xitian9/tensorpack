@@ -13,23 +13,24 @@ from tensorpack.utils.timer import timed_operation
 from config import config as cfg
 from dataset import DatasetRegistry, DatasetSplit
 
-__all__ = ['register_wood']
+__all__ = ['register_veneer']
 
 
-class WoodDetection(DatasetSplit):
+class VeneerDetection(DatasetSplit):
 
-    def __init__(self, basedir, name):
+    def __init__(self, basedir, annotation_file, name):
         """
         Args:
             basedir (str): root to the dataset
+            annotation_file (str): ground truth file
             name (str): the name of the split, e.g. "train2017"
         """
-        basedir = os.path.expanduser(basedir)
+        self.basedir = os.path.expanduser(basedir)
         self.name = name
-        self._imgdir = os.path.realpath(os.path.join(basedir, name))
-        assert os.path.isdir(self._imgdir), "{} is not a directory!".format(self._imgdir)
-        self.annotation_file = os.path.join(self._imgdir, 'groundTruth.csv')
+        self.annotation_file = os.path.realpath(os.path.join(self.basedir, annotation_file))
         assert os.path.isfile(self.annotation_file), self.annotation_file
+        self._imgdir = os.path.realpath(os.path.join(self.basedir, name))
+        # assert os.path.isdir(self._imgdir), "{} is not a directory!".format(self._imgdir)
 
         logger.info("Instances loaded from {}.".format(self.annotation_file))
 
@@ -48,13 +49,22 @@ class WoodDetection(DatasetSplit):
         assert not add_mask
 
         roidbs = []
-        image = {'file_name': ''}
+        image = {'dataset': '', 'file_name': ''}
         curBoxes = []
         curClasses = []
 
         def appendRoidb(img):
-            if img["file_name"]:
-                img["image_id"] = img["file_name"]
+            dataset = image["dataset"]
+            filename = image["file_name"]
+
+            base = os.path.join(self.basedir, dataset)
+            splits = [f for f in os.scandir(base)
+                          if f.is_dir() and os.path.isfile(os.path.join(f.path, filename))
+                             and os.path.join(dataset, f.name) == self.name]
+
+            if len(splits) == 1 and filename:
+                img["file_name"] = os.path.join(names[0].path, filename)
+                img["image_id"] = os.path.join(dataset, filename)
                 self._use_absolute_file_name(img)
                 if add_gt:
                     img["boxes"] = np.array(curBoxes)
@@ -70,9 +80,10 @@ class WoodDetection(DatasetSplit):
 
             for index, row in df.iterrows():
                 fn = row["filename"]
-                if fn != image["file_name"]:
+                dn = row["dataset"]
+                if not(dn == image["dataset"] and fn == image["file_name"]):
                     appendRoidb(image)
-                    image = {'file_name': fn}
+                    image = {'dataset': dn, 'file_name': fn}
                     curBoxes = []
                     curClasses = []
 
@@ -94,7 +105,7 @@ class WoodDetection(DatasetSplit):
         Change relative filename to abosolute file name.
         """
         img['file_name'] = os.path.join(
-            self._imgdir, img['file_name'])
+            self._imgdir, img['dataset'], img['file_name'])
         assert os.path.isfile(img['file_name']), img['file_name']
 
     def training_roidbs(self):
@@ -116,15 +127,15 @@ class WoodDetection(DatasetSplit):
             return {}
 
 
-def register_wood(basedir):
+def register_veneer(basedir, groundTruth):
     """
     Add COCO datasets like "coco_train201x" to the registry,
     so you can refer to them with names in `cfg.DATA.TRAIN/VAL`.
     """
-    class_names = ["hole", "branch"]
+    class_names = ["Bad Branch", "Hole", "Crack", "End Defect", "Good Branch", "Rot"]
     class_names = ["BG"] + class_names
 
     for split in ["train", "val"]:
-        name = "wood_" + split
-        DatasetRegistry.register(name, lambda x=split: WoodDetection(basedir, x))
+        name = "veneer_" + split
+        DatasetRegistry.register(name, lambda x=split: VeneerDetection(basedir, groundTruth, x))
         DatasetRegistry.register_metadata(name, 'class_names', class_names)
