@@ -135,7 +135,11 @@ def register_veneer(basedir, groundTruth):
     class_names = ["Bad Branch", "Hole", "Crack", "End Defect", "Good Branch", "Rot"]
     class_names = ["BG"] + class_names
 
-    for split in ["train", "val"]:
-        name = "veneer_" + split
-        DatasetRegistry.register(name, lambda x=split: VeneerDetection(basedir, groundTruth, x))
-        DatasetRegistry.register_metadata(name, 'class_names', class_names)
+    df = pd.read_csv(groundTruth,
+                     names=["x", "y", "width", "height", "class", "label", "dataset", "filename"])
+
+    for dataset in set(row["dataset"] for index, row in df.iterrows()):
+        for split in ["train", "val"]:
+            name = dataset + "_" + split
+            DatasetRegistry.register(name, lambda x=split: VeneerDetection(basedir, groundTruth, x))
+            DatasetRegistry.register_metadata(name, 'class_names', class_names)
