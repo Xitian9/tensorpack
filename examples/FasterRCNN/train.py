@@ -15,6 +15,7 @@ from tensorpack.tfutils.common import get_tf_version_tuple
 from dataset import register_veneer
 from config import config as base_config
 from config import finalize_configs
+from config_list import config_list
 import copy
 from data import get_train_dataflow
 from eval import EvalCallback
@@ -132,4 +133,6 @@ if __name__ == '__main__':
         # https://github.com/tensorflow/tensorflow/issues/14657
         logger.warn("TF<1.6 has a bug which may lead to crash in FasterRCNN if you're unlucky.")
 
-    
+    for config in config_list:
+        cfg, logdir, load = config
+        run_training(cfg, logdir, load)

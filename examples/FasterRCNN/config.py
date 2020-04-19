@@ -222,54 +222,54 @@ _C.TEST.RESULTS_PER_IM = 100
 _C.freeze()  # avoid typo / wrong config keys
 
 
-def finalize_configs(is_training):
+def finalize_configs(cfg, is_training):
     """
     Run some sanity checks, and populate some configs from others
     """
-    _C.freeze(False)  # populate new keys now
-    if isinstance(_C.DATA.VAL, six.string_types):  # support single string (the typical case) as well
-        _C.DATA.VAL = (_C.DATA.VAL, )
-    if isinstance(_C.DATA.TRAIN, six.string_types):  # support single string
-        _C.DATA.TRAIN = (_C.DATA.TRAIN, )
+    cfg.freeze(False)  # populate new keys now
+    if isinstance(cfg.DATA.VAL, six.string_types):  # support single string (the typical case) as well
+        cfg.DATA.VAL = (cfg.DATA.VAL, )
+    if isinstance(cfg.DATA.TRAIN, six.string_types):  # support single string
+        cfg.DATA.TRAIN = (cfg.DATA.TRAIN, )
 
     # finalize dataset definitions ...
     from dataset import DatasetRegistry
-    datasets = list(_C.DATA.TRAIN) + list(_C.DATA.VAL)
-    _C.DATA.CLASS_NAMES = DatasetRegistry.get_metadata(datasets[0], "class_names")
-    _C.DATA.NUM_CATEGORY = len(_C.DATA.CLASS_NAMES) - 1
+    datasets = list(cfg.DATA.TRAIN) + list(cfg.DATA.VAL)
+    cfg.DATA.CLASS_NAMES = DatasetRegistry.get_metadata(datasets[0], "class_names")
+    cfg.DATA.NUM_CATEGORY = len(cfg.DATA.CLASS_NAMES) - 1
 
-    assert _C.BACKBONE.NORM in ['FreezeBN', 'SyncBN', 'GN', 'None'], _C.BACKBONE.NORM
-    if _C.BACKBONE.NORM != 'FreezeBN':
-        assert not _C.BACKBONE.FREEZE_AFFINE
-    assert _C.BACKBONE.FREEZE_AT in [0, 1, 2, 3]
+    assert cfg.BACKBONE.NORM in ['FreezeBN', 'SyncBN', 'GN', 'None'], cfg.BACKBONE.NORM
+    if cfg.BACKBONE.NORM != 'FreezeBN':
+        assert not cfg.BACKBONE.FREEZE_AFFINE
+    assert cfg.BACKBONE.FREEZE_AT in [0, 1, 2, 3]
 
-    _C.RPN.NUM_ANCHOR = len(_C.RPN.ANCHOR_SIZES) * len(_C.RPN.ANCHOR_RATIOS)
-    assert len(_C.FPN.ANCHOR_STRIDES) == len(_C.RPN.ANCHOR_SIZES)
+    cfg.RPN.NUM_ANCHOR = len(cfg.RPN.ANCHOR_SIZES) * len(cfg.RPN.ANCHOR_RATIOS)
+    assert len(cfg.FPN.ANCHOR_STRIDES) == len(cfg.RPN.ANCHOR_SIZES)
     # image size into the backbone has to be multiple of this number
-    _C.FPN.RESOLUTION_REQUIREMENT = _C.FPN.ANCHOR_STRIDES[3]  # [3] because we build FPN with features r2,r3,r4,r5
+    cfg.FPN.RESOLUTION_REQUIREMENT = cfg.FPN.ANCHOR_STRIDES[3]  # [3] because we build FPN with features r2,r3,r4,r5
 
-    if _C.MODE_FPN:
-        size_mult = _C.FPN.RESOLUTION_REQUIREMENT * 1.
-        _C.PREPROC.MAX_SIZE = np.ceil(_C.PREPROC.MAX_SIZE / size_mult) * size_mult
-        assert _C.FPN.PROPOSAL_MODE in ['Level', 'Joint']
-        assert _C.FPN.FRCNN_HEAD_FUNC.endswith('_head')
-        assert _C.FPN.MRCNN_HEAD_FUNC.endswith('_head')
-        assert _C.FPN.NORM in ['None', 'GN']
+    if cfg.MODE_FPN:
+        size_mult = cfg.FPN.RESOLUTION_REQUIREMENT * 1.
+        cfg.PREPROC.MAX_SIZE = np.ceil(cfg.PREPROC.MAX_SIZE / size_mult) * size_mult
+        assert cfg.FPN.PROPOSAL_MODE in ['Level', 'Joint']
+        assert cfg.FPN.FRCNN_HEAD_FUNC.endswith('_head')
+        assert cfg.FPN.MRCNN_HEAD_FUNC.endswith('_head')
+        assert cfg.FPN.NORM in ['None', 'GN']
 
-        if _C.FPN.CASCADE:
+        if cfg.FPN.CASCADE:
             # the first threshold is the proposal sampling threshold
-            assert _C.CASCADE.IOUS[0] == _C.FRCNN.FG_THRESH
-            assert len(_C.CASCADE.BBOX_REG_WEIGHTS) == len(_C.CASCADE.IOUS)
+            assert cfg.CASCADE.IOUS[0] == cfg.FRCNN.FG_THRESH
+            assert len(cfg.CASCADE.BBOX_REG_WEIGHTS) == len(cfg.CASCADE.IOUS)
 
     if is_training:
-        train_scales = _C.PREPROC.TRAIN_SHORT_EDGE_SIZE
+        train_scales = cfg.PREPROC.TRAIN_SHORT_EDGE_SIZE
         if isinstance(train_scales, (list, tuple)) and train_scales[1] - train_scales[0] > 100:
             # don't autotune if augmentation is on
             os.environ['TF_CUDNN_USE_AUTOTUNE'] = '0'
         os.environ['TF_AUTOTUNE_THRESHOLD'] = '1'
-        assert _C.TRAINER in ['cpu', 'horovod', 'replicated'], _C.TRAINER
+        assert cfg.TRAINER in ['cpu', 'horovod', 'replicated'], cfg.TRAINER
 
-        lr = _C.TRAIN.LR_SCHEDULE
+        lr = cfg.TRAIN.LR_SCHEDULE
         if isinstance(lr, six.string_types):
             if lr.endswith("x"):
                 LR_SCHEDULE_KITER = {
@@ -277,17 +277,17 @@ def finalize_configs(is_training):
                     [180 * k - 120, 180 * k - 40, 180 * k]
                     for k in range(2, 10)}
                 LR_SCHEDULE_KITER["1x"] = [120, 160, 180]
-                _C.TRAIN.LR_SCHEDULE = [x * 1000 for x in LR_SCHEDULE_KITER[lr]]
+                cfg.TRAIN.LR_SCHEDULE = [x * 1000 for x in LR_SCHEDULE_KITER[lr]]
             else:
-                _C.TRAIN.LR_SCHEDULE = eval(lr)
+                cfg.TRAIN.LR_SCHEDULE = eval(lr)
 
         # setup NUM_GPUS
-        if _C.TRAINER == 'horovod':
+        if cfg.TRAINER == 'horovod':
             import horovod.tensorflow as hvd
             ngpu = hvd.size()
             logger.info("Horovod Rank={}, Size={}, LocalRank={}".format(
                 hvd.rank(), hvd.size(), hvd.local_rank()))
-        elif _C.TRAINER == 'replicated':
+        elif cfg.TRAINER == 'replicated':
             assert 'OMPI_COMM_WORLD_SIZE' not in os.environ
             ngpu = get_num_gpu()
             assert ngpu > 0, "Has to train with GPU!"
@@ -299,13 +299,13 @@ def finalize_configs(is_training):
         os.environ['TF_CUDNN_USE_AUTOTUNE'] = '0'
         ngpu = get_num_gpu()
 
-    if _C.TRAIN.NUM_GPUS is None:
-        _C.TRAIN.NUM_GPUS = ngpu
+    if cfg.TRAIN.NUM_GPUS is None:
+        cfg.TRAIN.NUM_GPUS = ngpu
     else:
-        if _C.TRAINER == 'horovod':
-            assert _C.TRAIN.NUM_GPUS == ngpu
+        if cfg.TRAINER == 'horovod':
+            assert cfg.TRAIN.NUM_GPUS == ngpu
         else:
-            assert _C.TRAIN.NUM_GPUS <= ngpu
+            assert cfg.TRAIN.NUM_GPUS <= ngpu
 
-    _C.freeze()
-    logger.info("Config: ------------------------------------------\n" + str(_C))
+    cfg.freeze()
+    logger.info("Config: ------------------------------------------\n" + str(cfg))

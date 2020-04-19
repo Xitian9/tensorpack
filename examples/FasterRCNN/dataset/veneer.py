@@ -2,6 +2,7 @@
 
 import json
 import os
+import os.path
 import numpy as np
 import pandas as pd
 import tqdm
@@ -18,19 +19,19 @@ __all__ = ['register_veneer']
 
 class VeneerDetection(DatasetSplit):
 
-    def __init__(self, basedir, gtfile, name):
+    def __init__(self, basedir, annotation_file, name):
         """
         Args:
             basedir (str): root to the dataset
             gtfile (str): ground truth file
             name (str): the name of the split, e.g. "train2017"
         """
-        basedir = os.path.expanduser(basedir)
+        self.basedir = os.path.expanduser(basedir)
         self.name = name
-        self._annotation_file = os.path.realpath(os.path.join(basedir, gtfile))
+        self.annotation_file = os.path.realpath(os.path.join(self.basedir, annotation_file))
         assert os.path.isfile(self.annotation_file), self.annotation_file
-        self._imgdir = os.path.realpath(os.path.join(basedir, name))
-        assert os.path.isdir(self._imgdir), "{} is not a directory!".format(self._imgdir)
+        self._imgdir = os.path.realpath(os.path.join(self.basedir, name))
+        #assert os.path.isdir(self._imgdir), "{} is not a directory!".format(self._imgdir)
 
         logger.info("Instances loaded from {}.".format(self.annotation_file))
 
@@ -59,7 +60,7 @@ class VeneerDetection(DatasetSplit):
 
             base = os.path.join(self.basedir, dataset)
             splits = [f for f in os.scandir(base)
-                          if f.is_dir() and os.is_file(os.path.join(f.path, filename))
+                          if f.is_dir() and os.path.isfile(os.path.join(f.path, filename))
                              and os.path.join(dataset, f.name) == self.name]
 
             if len(splits) == 1 and filename:
@@ -81,7 +82,7 @@ class VeneerDetection(DatasetSplit):
 
             for index, row in df.iterrows():
                 fn = row["filename"]
-                dn = row["dirname"]
+                dn = row["dataset"]
                 if dn != image["dataset"] or fn != image["file_name"]:
                     appendRoidb(image)
                     image = {'dataset': dn, 'file_name': fn}
