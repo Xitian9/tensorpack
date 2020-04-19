@@ -59,11 +59,12 @@ class VeneerDetection(DatasetSplit):
 
             base = os.path.join(self.basedir, dataset)
             splits = [f for f in os.scandir(base)
-                          if f.is_dir() and os.path.isfile(os.path.join(f.path, filename))
-                             and os.path.join(dataset, f.name) == self.name]
+                          if f.name == self.name
+                             and f.is_dir()
+                             and os.path.isfile(os.path.join(f.path, filename))]
 
             if len(splits) == 1 and filename:
-                img["file_name"] = os.path.join(names[0].path, filename)
+                img["file_name"] = os.path.join(splits[0].path, filename)
                 img["image_id"] = os.path.join(dataset, filename)
                 self._use_absolute_file_name(img)
                 if add_gt:
