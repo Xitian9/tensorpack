@@ -81,7 +81,7 @@ class TrainingDataPreprocessor:
             #CustomResize(cfg.PREPROC.TRAIN_SHORT_EDGE_SIZE, cfg.PREPROC.MAX_SIZE),
             # TODO should I randomly crop the image to speed up training?
             #imgaug.RandomCrop((800, 800)),
-            imgaug.RandomCropRandomShape(full_size, min_size, None, max_size)
+            imgaug.RandomCrop((min_size, full_size))
         ])
 
     def __call__(self, roidb):
