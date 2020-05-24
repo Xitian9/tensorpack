@@ -24,6 +24,8 @@ examples/private
 TODO.md
 .gitignore
 .vimrc.local
+*~
+*.swp
 
 
 # Byte-compiled / optimized / DLL files
