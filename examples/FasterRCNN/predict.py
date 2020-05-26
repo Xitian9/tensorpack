@@ -96,9 +96,12 @@ def do_evaluate(pred_config, output_file):
         DatasetRegistry.get(dataset).eval_inference_results(all_results, output)
 
 
-def do_predict(pred_func, input_file):
+def do_predict(pred_func, input_file, raw):
     img = cv2.imread(input_file, cv2.IMREAD_COLOR)
     results = predict_image(img, pred_func)
+    if raw:
+        for detection in results:
+            print(detection)
     if cfg.MODE_MASK:
         final = draw_final_outputs_blackwhite(img, results)
     else:
@@ -119,6 +122,8 @@ if __name__ == '__main__':
                                            "This argument is the path to the output json evaluation file")
     parser.add_argument('--predict', help="Run prediction on a given image. "
                                           "This argument is the path to the input image file", nargs='+')
+    parser.add_argument('--raw', help="Print raw output instead of visualising prediction.",
+                                          action='store_true')
     parser.add_argument('--benchmark', action='store_true', help="Benchmark the speed of the model + postprocessing")
     parser.add_argument('--config', help="A list of KEY=VALUE to overwrite those defined in config.py",
                         nargs='+')
@@ -161,7 +166,7 @@ if __name__ == '__main__':
         if args.predict:
             predictor = OfflinePredictor(predcfg)
             for image_file in args.predict:
-                do_predict(predictor, image_file)
+                do_predict(predictor, image_file, args.raw)
         elif args.evaluate:
             assert args.evaluate.endswith('.json'), args.evaluate
             do_evaluate(predcfg, args.evaluate)
